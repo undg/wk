@@ -15,7 +15,7 @@ func usage(w *os.File) {
 	fmt.Fprintf(w, "  wk ls [--porcelain]\n")
 	fmt.Fprintf(w, "  wk init\n")
 	fmt.Fprintf(w, "  wk completion <zsh|bash|fish>\n")
-	fmt.Fprintf(w, "  wk -h|--help\n\n")
+	fmt.Fprintf(w, "  wk help|-h|--help\n\n")
 	fmt.Fprintf(w, "BEHAVIOR\n")
 	fmt.Fprintf(w, "  add branch-name          creates <sanitized-branch> from origin/main\n")
 	fmt.Fprintf(w, "  add origin/branch-name   creates local branch-name from origin/branch-name\n")
@@ -41,7 +41,7 @@ func main() {
 
 	var err error
 	switch args[0] {
-	case "-h", "--help":
+	case "-h", "--help", "help":
 		usage(os.Stdout)
 		return
 	case "add":
