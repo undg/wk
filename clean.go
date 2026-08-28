@@ -71,7 +71,7 @@ func listWorktrees() ([]worktreeEntry, error) {
 }
 
 func promptYesNo(prompt string) bool {
-	fmt.Fprintf(os.Stderr, "%s (y/n) ", prompt)
+	fmt.Fprintf(os.Stderr, "%s (y/n) ", highlightDelete(prompt))
 	answer, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 	answer = strings.ToLower(strings.TrimSpace(answer))
 	return answer == "y" || answer == "yes"
