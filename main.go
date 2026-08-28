@@ -3,7 +3,44 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime/debug"
 )
+
+// version is set via -ldflags "-X main.version=..." at build time, using
+// the git tag (see Makefile). When unset, resolveVersion falls back to Go's
+// automatic VCS build stamping.
+var version = "dev"
+
+// resolveVersion returns the ldflags-injected version, or falls back to the
+// commit hash Go automatically embeds from VCS info when built without
+// ldflags (e.g. `go run .` or a plain `go install`).
+func resolveVersion() string {
+	if version != "dev" {
+		return version
+	}
+	if info, ok := debug.ReadBuildInfo(); ok {
+		var revision string
+		var dirty bool
+		for _, s := range info.Settings {
+			switch s.Key {
+			case "vcs.revision":
+				revision = s.Value
+			case "vcs.modified":
+				dirty = s.Value == "true"
+			}
+		}
+		if revision != "" {
+			if len(revision) > 12 {
+				revision = revision[:12]
+			}
+			if dirty {
+				revision += "-dirty"
+			}
+			return revision
+		}
+	}
+	return "dev"
+}
 
 func usage(w *os.File) {
 	fmt.Fprintf(w, "wk\n\n")
@@ -15,6 +52,7 @@ func usage(w *os.File) {
 	fmt.Fprintf(w, "  wk ls [--porcelain]\n")
 	fmt.Fprintf(w, "  wk init\n")
 	fmt.Fprintf(w, "  wk completion <zsh|bash|fish>\n")
+	fmt.Fprintf(w, "  wk version|-v|--version\n")
 	fmt.Fprintf(w, "  wk help|-h|--help\n\n")
 	fmt.Fprintf(w, "BEHAVIOR\n")
 	fmt.Fprintf(w, "  add branch-name          creates <sanitized-branch> from origin/main\n")
@@ -24,7 +62,8 @@ func usage(w *os.File) {
 	fmt.Fprintf(w, "  ls [--porcelain]         show worktrees + tmux session status\n")
 	fmt.Fprintf(w, "                           --porcelain: parse-friendly 3-line blocks (branch, dir, session)\n")
 	fmt.Fprintf(w, "  init                     scaffold a starter .wk.toml in the current directory\n")
-	fmt.Fprintf(w, "  completion <shell>       print a completion script for zsh, bash, or fish\n\n")
+	fmt.Fprintf(w, "  completion <shell>       print a completion script for zsh, bash, or fish\n")
+	fmt.Fprintf(w, "  version                  print the wk version\n\n")
 	fmt.Fprintf(w, "EXAMPLES\n")
 	fmt.Fprintf(w, "  wk add feat/my-branch\n")
 	fmt.Fprintf(w, "  wk add origin/someone-branch\n")
@@ -43,6 +82,9 @@ func main() {
 	switch args[0] {
 	case "-h", "--help", "help":
 		usage(os.Stdout)
+		return
+	case "version", "-v", "--version":
+		fmt.Println("wk", resolveVersion())
 		return
 	case "add":
 		if len(args) != 2 {

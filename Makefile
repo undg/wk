@@ -1,5 +1,6 @@
 BINARY_NAME := wk
 INSTALL_PATH := ~/.dot/bin/bin/$(BINARY_NAME)
+VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
 .PHONY: help
 help:
@@ -8,7 +9,7 @@ help:
 ## build: build the binary into ./bin
 .PHONY: build
 build:
-	go build -o bin/$(BINARY_NAME) .
+	go build -ldflags "-X main.version=$(VERSION)" -o bin/$(BINARY_NAME) .
 
 ## install: build and copy the binary into ~/.dot/bin/bin, replacing the bash POC
 .PHONY: install
