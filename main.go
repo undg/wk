@@ -14,6 +14,7 @@ func usage(w *os.File) {
 	fmt.Fprintf(w, "  wk clean\n")
 	fmt.Fprintf(w, "  wk ls [--porcelain]\n")
 	fmt.Fprintf(w, "  wk init\n")
+	fmt.Fprintf(w, "  wk completion <zsh|bash|fish>\n")
 	fmt.Fprintf(w, "  wk -h|--help\n\n")
 	fmt.Fprintf(w, "BEHAVIOR\n")
 	fmt.Fprintf(w, "  add branch-name          creates <sanitized-branch> from origin/main\n")
@@ -22,7 +23,8 @@ func usage(w *os.File) {
 	fmt.Fprintf(w, "  clean                    delete worktrees whose branch PR has merged\n")
 	fmt.Fprintf(w, "  ls [--porcelain]         show worktrees + tmux session status\n")
 	fmt.Fprintf(w, "                           --porcelain: parse-friendly 3-line blocks (branch, dir, session)\n")
-	fmt.Fprintf(w, "  init                     scaffold a starter .wk.toml in the current directory\n\n")
+	fmt.Fprintf(w, "  init                     scaffold a starter .wk.toml in the current directory\n")
+	fmt.Fprintf(w, "  completion <shell>       print a completion script for zsh, bash, or fish\n\n")
 	fmt.Fprintf(w, "EXAMPLES\n")
 	fmt.Fprintf(w, "  wk add feat/my-branch\n")
 	fmt.Fprintf(w, "  wk add origin/someone-branch\n")
@@ -85,6 +87,8 @@ func main() {
 			os.Exit(1)
 		}
 		err = runInit()
+	case "completion":
+		err = runCompletion(args[1:])
 	default:
 		// No implicit create: a bare branch name here is either a typo of a
 		// subcommand or a stray argument, not a create request.

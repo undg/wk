@@ -97,7 +97,25 @@ wk init                      # scaffold a starter .wk.toml in the current direct
 
 New branches created off `base_ref` (e.g. `origin/main`) are meant to track `base_ref` immediately, so `git pull --rebase` works before you've ever pushed — but `wk` doesn't yet set this explicitly (see [[spec]]'s plan-of-action step 6+); today it only happens if your global `branch.autoSetupMerge` git config already does it, same as the old pgm-fe POC relied on. Check `git status`/`git branch -vv` after your first `wk add` in a repo to confirm tracking landed on `base_ref` before assuming it. Once you're ready to push, run `gup` — it re-points tracking from `base_ref` to the branch's own remote counterpart.
 
-## 5. Known sharp edges
+## 5. Shell completion
+
+`wk completion <zsh|bash|fish>` prints a completion script. `delete`/`rm` completion shells out to `wk ls --porcelain` for live worktree-dir suggestions; `add` completion suggests remote branch names.
+
+For zsh, drop the script into a directory that's already in your `fpath` (before `compinit` runs) rather than `eval`-ing it — the `#compdef` marker that registers the completion is only picked up by `compinit` scanning `fpath`, not by `eval`:
+
+```sh
+mkdir -p ~/.zsh/completions   # or wherever your fpath already points
+wk completion zsh > ~/.zsh/completions/_wk
+```
+
+Bash and fish can use the more familiar `eval` form:
+
+```sh
+eval "$(wk completion bash)"   # ~/.bashrc
+wk completion fish | source    # ~/.config/fish/config.fish
+```
+
+## 6. Known sharp edges
 
 - **Deleting your current session is refused, not survived**: `wk delete`/`wk rm` on the worktree whose tmux session you're currently attached to errors out instead of tearing it down — killing that session mid-command would kill the very process running the deletion. Run the delete from another session (or outside tmux) instead. A "survive the session's death" flow (switch to a fallback session, finish teardown in the background) is designed in [[spec]] but not yet built.
 - **Teardown runs before removal, not after**: a repo's `teardown` steps run while the worktree still exists, right before the tmux session is killed and the worktree is removed — not as post-removal cleanup.
