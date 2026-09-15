@@ -1,6 +1,7 @@
 BINARY_NAME := wk
 INSTALL_PATH := ~/.dot/bin/bin/$(BINARY_NAME)
-VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+DIRTY := $(shell test -z "$$(git status --porcelain 2>/dev/null)" || echo -dirty)
+VERSION := $(shell git describe --tags --always 2>/dev/null || echo dev)$(DIRTY)
 
 .PHONY: help
 help:
