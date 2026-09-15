@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -165,13 +166,35 @@ func parseHerdrWorkspaces(out []byte) ([]herdrWorkspace, error) {
 // runHerdr runs a socket-API command, capturing the JSON it replies with so
 // it never lands in the user's terminal. herdr reports server errors as JSON
 // on stderr, which stays inherited so those surface as-is.
+//
+// HERDR_WORKSPACE_ID is stripped from the child's env: when wk itself runs
+// inside a herdr pane, herdr prefers that env var over cwd to pick the
+// "source" workspace for worktree open/create, and rejects the call if that
+// ambient workspace is itself a linked worktree ("linked_worktree_source").
+// wk always operates on an explicit --path/--label anyway, so it never wants
+// ambient-workspace inference; dropping the var lets herdr fall back to cwd,
+// which loadProjectConfig has already set to the project root.
 func runHerdr(args ...string) ([]byte, error) {
 	cmd := exec.Command("herdr", args...)
 	cmd.Stderr = os.Stderr
+	cmd.Env = filterEnv(os.Environ(), "HERDR_WORKSPACE_ID")
 
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("herdr %s failed: %w", strings.Join(args, " "), err)
 	}
 	return out, nil
+}
+
+// filterEnv returns env with any variable named in drop removed.
+func filterEnv(env []string, drop ...string) []string {
+	out := make([]string, 0, len(env))
+	for _, kv := range env {
+		key, _, _ := strings.Cut(kv, "=")
+		if slices.Contains(drop, key) {
+			continue
+		}
+		out = append(out, kv)
+	}
+	return out
 }
