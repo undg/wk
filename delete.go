@@ -6,6 +6,21 @@ import (
 	"strings"
 )
 
+// worktreeDirForBranch finds the worktree directory whose checked-out branch
+// matches branch, tolerating a leading "./" or "/" on either side.
+func worktreeDirForBranch(branch string) (string, bool) {
+	entries, err := listWorktrees()
+	if err != nil {
+		return "", false
+	}
+	for _, wt := range entries {
+		if wt.Branch == branch {
+			return wt.Dir, true
+		}
+	}
+	return "", false
+}
+
 func runDelete(rawDir, backendOverride string) error {
 	var worktreeDir string
 	if strings.HasPrefix(rawDir, "/") {
@@ -15,11 +30,18 @@ func runDelete(rawDir, backendOverride string) error {
 	}
 
 	logInfo("delete mode")
-	logInfo("target worktree: %s", worktreeDir)
 
 	if info, err := os.Stat(worktreeDir); err != nil || !info.IsDir() {
-		return fmt.Errorf("worktree directory not found: %s", worktreeDir)
+		// rawDir didn't match a directory directly; maybe it's a branch
+		// name (e.g. copied from `git branch` or a session label) rather
+		// than the sanitized worktree dir. Look it up by branch instead.
+		if resolved, ok := worktreeDirForBranch(rawDir); ok {
+			worktreeDir = resolved
+		} else {
+			return fmt.Errorf("worktree directory not found: %s", worktreeDir)
+		}
 	}
+	logInfo("target worktree: %s", worktreeDir)
 
 	cfg, err := loadProjectConfig()
 	if err != nil {
