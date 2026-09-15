@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"runtime/debug"
+	"strings"
 )
 
 // version is set via -ldflags "-X main.version=..." at build time, using
@@ -55,30 +56,76 @@ func usage(w *os.File) {
 	fmt.Fprintf(w, "  wk version|-v|--version\n")
 	fmt.Fprintf(w, "  wk help|-h|--help\n\n")
 	fmt.Fprintf(w, "BEHAVIOR\n")
-	fmt.Fprintf(w, "  add branch-name          creates <sanitized-branch> from origin/main\n")
+	fmt.Fprintf(w, "  add branch-name          creates <sanitized-branch>; checks out origin/branch-name\n")
+	fmt.Fprintf(w, "                           when it exists, else branches from base_ref\n")
 	fmt.Fprintf(w, "  add origin/branch-name   creates local branch-name from origin/branch-name\n")
-	fmt.Fprintf(w, "  delete/rm <dir>          removes worktree, deletes its branch, prunes\n")
+	fmt.Fprintf(w, "  delete/rm <dir>          removes worktree + its session, deletes its branch, prunes\n")
 	fmt.Fprintf(w, "  clean                    delete worktrees whose branch PR has merged\n")
-	fmt.Fprintf(w, "  ls [--porcelain]         show worktrees + tmux session status\n")
+	fmt.Fprintf(w, "  ls [--porcelain]         show worktrees + session status\n")
 	fmt.Fprintf(w, "                           --porcelain: parse-friendly 3-line blocks (branch, dir, session)\n")
 	fmt.Fprintf(w, "  init                     scaffold a starter .wk.toml in the current directory\n")
 	fmt.Fprintf(w, "  completion <shell>       print a completion script for zsh, bash, or fish\n")
 	fmt.Fprintf(w, "  version                  print the wk version\n\n")
+	fmt.Fprintf(w, "SESSION BACKEND\n")
+	fmt.Fprintf(w, "  --herdr | --tmux         override the backend for this run (default: herdr)\n")
+	fmt.Fprintf(w, "  --backend <herdr|tmux>   same, long form; beats session_backend in config.toml\n\n")
 	fmt.Fprintf(w, "EXAMPLES\n")
 	fmt.Fprintf(w, "  wk add feat/my-branch\n")
 	fmt.Fprintf(w, "  wk add origin/someone-branch\n")
 	fmt.Fprintf(w, "  wk delete feat-my-branch\n")
+	fmt.Fprintf(w, "  wk --tmux add feat/my-branch\n")
+}
+
+// extractBackendFlag pulls the session-backend override out of args wherever
+// it appears, so each subcommand's own argument-count checks stay unchanged.
+// A bad value is rejected here rather than in newSessionBackend, so a typo
+// fails before anything loads config or offers to scaffold a .wk.toml.
+func extractBackendFlag(args []string) (string, []string, error) {
+	badValue := func(got string) error {
+		return fmt.Errorf("--backend needs %s or %s, got %q", backendHerdr, backendTmux, got)
+	}
+
+	override := ""
+	var rest []string
+	for i := 0; i < len(args); i++ {
+		switch arg := args[i]; {
+		case arg == "--herdr":
+			override = backendHerdr
+		case arg == "--tmux":
+			override = backendTmux
+		case strings.HasPrefix(arg, "--backend="):
+			override = strings.TrimPrefix(arg, "--backend=")
+		case arg == "--backend":
+			if i+1 >= len(args) {
+				return "", nil, badValue("")
+			}
+			i++
+			override = args[i]
+		default:
+			rest = append(rest, arg)
+			continue
+		}
+
+		if !validBackendKind(override) {
+			return "", nil, badValue(override)
+		}
+	}
+	return override, rest, nil
 }
 
 func main() {
-	args := os.Args[1:]
+	backendOverride, args, err := extractBackendFlag(os.Args[1:])
+	if err != nil {
+		logError("%s", err.Error())
+		usage(os.Stderr)
+		os.Exit(1)
+	}
 	if len(args) == 0 {
 		logError("missing argument")
 		usage(os.Stderr)
 		os.Exit(1)
 	}
 
-	var err error
 	switch args[0] {
 	case "-h", "--help", "help":
 		usage(os.Stdout)
@@ -92,20 +139,20 @@ func main() {
 			usage(os.Stderr)
 			os.Exit(1)
 		}
-		err = runCreate(args[1])
+		err = runCreate(args[1], backendOverride)
 	case "delete", "rm":
 		if len(args) != 2 {
 			logError("expected exactly one worktree-dir argument")
 			usage(os.Stderr)
 			os.Exit(1)
 		}
-		err = runDelete(args[1])
+		err = runDelete(args[1], backendOverride)
 	case "clean":
 		if len(args) != 1 {
 			logError("clean takes no arguments")
 			os.Exit(1)
 		}
-		err = runClean()
+		err = runClean(backendOverride)
 	case "ls":
 		porcelain := false
 		switch len(args) {
@@ -122,7 +169,7 @@ func main() {
 			usage(os.Stderr)
 			os.Exit(1)
 		}
-		err = runLs(porcelain)
+		err = runLs(porcelain, backendOverride)
 	case "init":
 		if len(args) != 1 {
 			logError("init takes no arguments")

@@ -77,12 +77,13 @@ func promptYesNo(prompt string) bool {
 	return answer == "y" || answer == "yes"
 }
 
-func runClean() error {
+func runClean(backendOverride string) error {
 	entries, err := listWorktrees()
 	if err != nil {
 		return err
 	}
-	return cleanWorktrees(entries, ghPRLister{}, promptYesNo, runDelete)
+	deleteFn := func(dir string) error { return runDelete(dir, backendOverride) }
+	return cleanWorktrees(entries, ghPRLister{}, promptYesNo, deleteFn)
 }
 
 // cleanWorktrees is the testable core of `wk clean`: for each worktree with

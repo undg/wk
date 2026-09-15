@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 )
 
-const starterRepoConfigTemplate = `name = %q                    # optional; overrides folder name for tmux's {project}
+const starterRepoConfigTemplate = `name = %q                    # optional; overrides folder name for the session template's {project}
 base_ref = "origin/main"     # optional; overrides global default_base_ref
 
 setup = [

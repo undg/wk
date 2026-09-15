@@ -2,12 +2,17 @@ package main
 
 import "fmt"
 
-// runLs shows worktrees for the current project alongside their tmux
-// session status (detected the same way as add/delete/clean, via .wk.toml).
+// runLs shows worktrees for the current project alongside their session
+// status (detected the same way as add/delete/clean, via .wk.toml).
 // With porcelain=true, output is 3-line blocks (branch, dir, session name)
 // separated by a blank line, meant for scripts rather than humans.
-func runLs(porcelain bool) error {
+func runLs(porcelain bool, backendOverride string) error {
 	cfg, err := loadProjectConfig()
+	if err != nil {
+		return err
+	}
+
+	backend, err := newSessionBackend(cfg.SessionBackend, backendOverride)
 	if err != nil {
 		return err
 	}
@@ -27,9 +32,12 @@ func runLs(porcelain bool) error {
 	for _, wt := range entries {
 		sessionName := ""
 		if wt.Branch != "" {
-			candidate := tmuxSessionName(cfg.TmuxTemplate, wt.Branch, cfg.ProjectName)
-			if tmuxHasSession(candidate) {
-				sessionName = candidate
+			candidate := session{
+				Name: sessionNameFromTemplate(cfg.SessionTemplate, wt.Branch, cfg.ProjectName),
+				Dir:  wt.Dir,
+			}
+			if backend.Has(candidate) {
+				sessionName = candidate.Name
 			}
 		}
 
@@ -42,9 +50,9 @@ func runLs(porcelain bool) error {
 		if branch == "" {
 			branch = "(detached)"
 		}
-		session := "no tmux session"
+		session := "no " + backend.Kind() + " session"
 		if sessionName != "" {
-			session = "tmux: " + sessionName
+			session = backend.Kind() + ": " + sessionName
 		}
 		fmt.Printf("%-30s %-40s %s\n", branch, wt.Dir, session)
 	}

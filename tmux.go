@@ -6,11 +6,24 @@ import (
 	"strings"
 )
 
-func tmuxSessionName(template, branch, project string) string {
-	name := strings.ReplaceAll(template, "{branch}", branch)
-	name = strings.ReplaceAll(name, "{project}", project)
-	return name
+// tmuxBackend adapts the tmux helpers below to sessionBackend. tmux
+// addresses sessions by name, so session.Dir only matters when creating one.
+type tmuxBackend struct{}
+
+func (tmuxBackend) Kind() string { return backendTmux }
+
+func (tmuxBackend) Has(s session) bool { return tmuxHasSession(s.Name) }
+
+func (tmuxBackend) IsCurrent(s session) bool {
+	current, ok := tmuxCurrentSession()
+	return ok && current == s.Name
 }
+
+func (tmuxBackend) Create(s session) error { return tmuxNewDetachedSession(s.Name, s.Dir) }
+
+func (tmuxBackend) Kill(s session) error { return tmuxKillSession(s.Name) }
+
+func (tmuxBackend) AttachOrSwitch(s session) error { return tmuxAttachOrSwitch(s.Name) }
 
 func tmuxHasSession(name string) bool {
 	cmd := exec.Command("tmux", "has-session", "-t", "="+name)

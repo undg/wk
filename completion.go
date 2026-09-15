@@ -39,9 +39,12 @@ _wk() {
     'delete:remove a worktree, its branch, and prune'
     'rm:alias for delete'
     'clean:delete worktrees whose branch PR has merged'
-    'ls:show worktrees + tmux session status'
+    'ls:show worktrees + session status'
     'init:scaffold a starter .wk.toml'
     'completion:generate shell completion scripts'
+    '--herdr:use the herdr session backend for this run'
+    '--tmux:use the tmux session backend for this run'
+    '--backend:session backend for this run (herdr or tmux)'
     '-h:show usage'
     '--help:show usage'
   )
@@ -52,6 +55,11 @@ _wk() {
   fi
 
   case ${words[2]} in
+    --backend)
+      local -a backends
+      backends=(herdr tmux)
+      _describe -t backends 'session backend' backends
+      ;;
     add)
       _wk_branches
       ;;
@@ -95,7 +103,12 @@ const bashCompletionScript = `_wk_completions() {
   prev="${COMP_WORDS[COMP_CWORD-1]}"
 
   if [[ $COMP_CWORD -eq 1 ]]; then
-    COMPREPLY=($(compgen -W "add delete rm clean ls init completion -h --help" -- "$cur"))
+    COMPREPLY=($(compgen -W "add delete rm clean ls init completion --herdr --tmux --backend -h --help" -- "$cur"))
+    return
+  fi
+
+  if [[ "$prev" == "--backend" ]]; then
+    COMPREPLY=($(compgen -W "herdr tmux" -- "$cur"))
     return
   fi
 
@@ -134,7 +147,7 @@ complete -c wk -n '__fish_use_subcommand' -a add -d 'create a worktree + branch 
 complete -c wk -n '__fish_use_subcommand' -a delete -d 'remove a worktree, its branch, and prune'
 complete -c wk -n '__fish_use_subcommand' -a rm -d 'alias for delete'
 complete -c wk -n '__fish_use_subcommand' -a clean -d 'delete worktrees whose branch PR has merged'
-complete -c wk -n '__fish_use_subcommand' -a ls -d 'show worktrees + tmux session status'
+complete -c wk -n '__fish_use_subcommand' -a ls -d 'show worktrees + session status'
 complete -c wk -n '__fish_use_subcommand' -a init -d 'scaffold a starter .wk.toml'
 complete -c wk -n '__fish_use_subcommand' -a completion -d 'generate shell completion scripts'
 complete -c wk -n '__fish_use_subcommand' -s h -l help -d 'show usage'
@@ -143,4 +156,8 @@ complete -c wk -n '__fish_seen_subcommand_from add' -a '(__wk_branches)'
 complete -c wk -n '__fish_seen_subcommand_from delete rm' -a '(__wk_worktree_dirs)'
 complete -c wk -n '__fish_seen_subcommand_from ls' -l porcelain
 complete -c wk -n '__fish_seen_subcommand_from completion' -a 'zsh bash fish'
+
+complete -c wk -l herdr -d 'use the herdr session backend for this run'
+complete -c wk -l tmux -d 'use the tmux session backend for this run'
+complete -c wk -l backend -x -a 'herdr tmux' -d 'session backend for this run'
 `

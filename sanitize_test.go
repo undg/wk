@@ -21,10 +21,10 @@ func TestSanitizeBranch(t *testing.T) {
 	}
 }
 
-func TestTmuxSessionName(t *testing.T) {
-	got := tmuxSessionName(defaultTmuxSessionTemplate, "feat/123/add-btn", "pgm-be")
+func TestSessionNameFromTemplate(t *testing.T) {
+	got := sessionNameFromTemplate(defaultSessionTemplate, "feat/123/add-btn", "pgm-be")
 	want := "feat/123/add-btn [pgm-be]"
 	if got != want {
-		t.Errorf("tmuxSessionName() = %q, want %q", got, want)
+		t.Errorf("sessionNameFromTemplate() = %q, want %q", got, want)
 	}
 }

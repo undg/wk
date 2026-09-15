@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func runCreate(rawBranchArg string) error {
+func runCreate(rawBranchArg, backendOverride string) error {
 	if !isBareRepository() {
 		return fmt.Errorf("run this from a bare repository")
 	}
@@ -16,12 +16,26 @@ func runCreate(rawBranchArg string) error {
 		return err
 	}
 
+	backend, err := newSessionBackend(cfg.SessionBackend, backendOverride)
+	if err != nil {
+		return err
+	}
+
 	rawBranch := rawBranchArg
 	baseRef := cfg.BaseRef
+	trackRemote := false
 
 	if strings.HasPrefix(rawBranch, "origin/") {
 		baseRef = rawBranch
 		rawBranch = strings.TrimPrefix(rawBranch, "origin/")
+		trackRemote = true
+	} else if !branchExists(rawBranch) && refExists("origin/"+rawBranch) {
+		// Shell completion offers remote branch names with the origin/
+		// prefix stripped, so a completed name is usually a branch that
+		// already exists on the remote — check it out instead of starting
+		// unrelated work off base_ref.
+		baseRef = "origin/" + rawBranch
+		trackRemote = true
 	}
 
 	slug := SanitizeBranch(rawBranch)
@@ -29,13 +43,16 @@ func runCreate(rawBranchArg string) error {
 		return fmt.Errorf("branch name became empty after sanitization")
 	}
 	worktreeDir := "./" + slug
-	sessionName := tmuxSessionName(cfg.TmuxTemplate, rawBranch, cfg.ProjectName)
+	sess := session{
+		Name: sessionNameFromTemplate(cfg.SessionTemplate, rawBranch, cfg.ProjectName),
+		Dir:  worktreeDir,
+	}
 
 	logInfo("create mode")
 	logInfo("branch: %s", rawBranch)
 	logInfo("base: %s", baseRef)
 	logInfo("worktree: %s", worktreeDir)
-	logInfo("tmux session: %s", sessionName)
+	logInfo("%s session: %s", backend.Kind(), sess.Name)
 
 	if !refExists(baseRef) {
 		fetchMissingBaseRef(baseRef)
@@ -48,8 +65,8 @@ func runCreate(rawBranchArg string) error {
 		return fmt.Errorf("worktree path already exists: %s", worktreeDir)
 	}
 
-	if tmuxHasSession(sessionName) {
-		return fmt.Errorf("tmux session already exists: %s", sessionName)
+	if backend.Has(sess) {
+		return fmt.Errorf("%s session already exists: %s", backend.Kind(), sess.Name)
 	}
 
 	logStep("creating worktree")
@@ -57,7 +74,7 @@ func runCreate(rawBranchArg string) error {
 		logInfo("branch already exists, reusing: %s", rawBranch)
 		err = worktreeAddExisting(worktreeDir, rawBranch)
 	} else {
-		err = worktreeAddNew(worktreeDir, rawBranch, baseRef)
+		err = worktreeAddNew(worktreeDir, rawBranch, baseRef, trackRemote)
 	}
 	if err != nil {
 		return fmt.Errorf("git worktree add failed: %w", err)
@@ -70,10 +87,10 @@ func runCreate(rawBranchArg string) error {
 		}
 	}
 
-	logStep("starting tmux session: %s", sessionName)
-	if err := tmuxNewDetachedSession(sessionName, worktreeDir); err != nil {
-		return fmt.Errorf("tmux new-session failed: %w", err)
+	logStep("starting %s session: %s", backend.Kind(), sess.Name)
+	if err := backend.Create(sess); err != nil {
+		return fmt.Errorf("creating %s session failed: %w", backend.Kind(), err)
 	}
 
-	return tmuxAttachOrSwitch(sessionName)
+	return backend.AttachOrSwitch(sess)
 }

@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func runDelete(rawDir string) error {
+func runDelete(rawDir, backendOverride string) error {
 	var worktreeDir string
 	if strings.HasPrefix(rawDir, "/") {
 		worktreeDir = rawDir
@@ -26,19 +26,27 @@ func runDelete(rawDir string) error {
 		return err
 	}
 
+	backend, err := newSessionBackend(cfg.SessionBackend, backendOverride)
+	if err != nil {
+		return err
+	}
+
 	branch, err := branchOfWorktree(worktreeDir)
 	if err != nil || branch == "" || branch == "HEAD" {
 		return fmt.Errorf("could not determine branch from worktree: %s", worktreeDir)
 	}
 	logInfo("detected branch: %s", branch)
 
-	sessionName := tmuxSessionName(cfg.TmuxTemplate, branch, cfg.ProjectName)
+	sess := session{
+		Name: sessionNameFromTemplate(cfg.SessionTemplate, branch, cfg.ProjectName),
+		Dir:  worktreeDir,
+	}
 
-	// Killing the tmux session you're currently attached to tears down your
-	// own pty mid-command; the "survive the session's death" flow is a later
+	// Killing the session you're currently attached to tears down your own
+	// pty mid-command; the "survive the session's death" flow is a later
 	// step, so for now this matches the POC and refuses.
-	if current, ok := tmuxCurrentSession(); ok && current == sessionName {
-		return fmt.Errorf("cannot delete the current tmux session (run this command from another session or outside tmux)")
+	if backend.IsCurrent(sess) {
+		return fmt.Errorf("cannot delete the current %s session (run this command from another session or outside %s)", backend.Kind(), backend.Kind())
 	}
 
 	if len(cfg.Teardown) > 0 {
@@ -48,13 +56,13 @@ func runDelete(rawDir string) error {
 		}
 	}
 
-	if tmuxHasSession(sessionName) {
-		logStep("killing tmux session: %s", sessionName)
-		if err := tmuxKillSession(sessionName); err != nil {
-			return fmt.Errorf("failed to kill tmux session: %w", err)
+	if backend.Has(sess) {
+		logStep("killing %s session: %s", backend.Kind(), sess.Name)
+		if err := backend.Kill(sess); err != nil {
+			return fmt.Errorf("failed to kill %s session: %w", backend.Kind(), err)
 		}
 	} else {
-		logInfo("no tmux session found: %s", sessionName)
+		logInfo("no %s session found: %s", backend.Kind(), sess.Name)
 	}
 
 	logStep("removing worktree")

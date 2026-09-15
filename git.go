@@ -52,8 +52,17 @@ func fetchMissingBaseRef(baseRef string) {
 	_ = runGitInherit("fetch", remote, refspec)
 }
 
-func worktreeAddNew(dir, branch, base string) error {
-	return runGitInherit("worktree", "add", "-b", branch, dir, base)
+// worktreeAddNew creates branch at base in a new worktree. When base is the
+// remote branch of the same name, track makes it the upstream: git's own
+// DWIM would do that for `git worktree add <dir> <branch>`, but never fires
+// here because wk always passes -b explicitly, and without --track the
+// branch starts at the right commit with no upstream to push to.
+func worktreeAddNew(dir, branch, base string, track bool) error {
+	args := []string{"worktree", "add"}
+	if track {
+		args = append(args, "--track")
+	}
+	return runGitInherit(append(args, "-b", branch, dir, base)...)
 }
 
 func worktreeAddExisting(dir, branch string) error {

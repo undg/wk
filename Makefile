@@ -11,10 +11,9 @@ help:
 build:
 	go build -ldflags "-X main.version=$(VERSION)" -o bin/$(BINARY_NAME) .
 
-## install: build and copy the binary into ~/.dot/bin/bin, replacing the bash POC
+## install: build the binary; ~/.dot/bin/bin/wk is a symlink into bin/, so build already deploys it
 .PHONY: install
 install: build
-	cp bin/$(BINARY_NAME) $(INSTALL_PATH)
 
 ## test: run all tests
 .PHONY: test

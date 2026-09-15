@@ -11,19 +11,21 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-const defaultTmuxSessionTemplate = "{branch} [{project}]"
+const defaultSessionTemplate = "{branch} [{project}]"
 
 // GlobalConfig is ~/.config/wk/config.toml — options that apply to every
 // project. Nothing project-specific belongs here.
 type GlobalConfig struct {
-	DefaultBaseRef      string `toml:"default_base_ref"`
-	TmuxSessionTemplate string `toml:"tmux_session_template"`
+	DefaultBaseRef  string `toml:"default_base_ref"`
+	SessionTemplate string `toml:"session_template"`
+	SessionBackend  string `toml:"session_backend"`
 }
 
 func defaultGlobalConfig() GlobalConfig {
 	return GlobalConfig{
-		DefaultBaseRef:      "origin/main",
-		TmuxSessionTemplate: defaultTmuxSessionTemplate,
+		DefaultBaseRef:  "origin/main",
+		SessionTemplate: defaultSessionTemplate,
+		SessionBackend:  backendHerdr,
 	}
 }
 
@@ -81,11 +83,12 @@ func loadRepoConfig(dir string) (RepoConfig, error) {
 // ProjectConfig is the global defaults merged with the current project's
 // .wk.toml overrides, plus fields derived from cwd.
 type ProjectConfig struct {
-	ProjectName  string
-	BaseRef      string
-	TmuxTemplate string
-	Setup        []string
-	Teardown     []string
+	ProjectName     string
+	BaseRef         string
+	SessionTemplate string
+	SessionBackend  string
+	Setup           []string
+	Teardown        []string
 }
 
 // loadProjectConfig detects the project root as cwd (wk is only ever run
@@ -120,17 +123,18 @@ func loadProjectConfig() (ProjectConfig, error) {
 		baseRef = global.DefaultBaseRef
 	}
 
-	tmuxTemplate := global.TmuxSessionTemplate
-	if tmuxTemplate == "" {
-		tmuxTemplate = defaultTmuxSessionTemplate
+	sessionTemplate := global.SessionTemplate
+	if sessionTemplate == "" {
+		sessionTemplate = defaultSessionTemplate
 	}
 
 	return ProjectConfig{
-		ProjectName:  projectName,
-		BaseRef:      baseRef,
-		TmuxTemplate: tmuxTemplate,
-		Setup:        repo.Setup,
-		Teardown:     repo.Teardown,
+		ProjectName:     projectName,
+		BaseRef:         baseRef,
+		SessionTemplate: sessionTemplate,
+		SessionBackend:  global.SessionBackend,
+		Setup:           repo.Setup,
+		Teardown:        repo.Teardown,
 	}, nil
 }
 
