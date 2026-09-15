@@ -7,13 +7,17 @@ import (
 )
 
 func runCreate(rawBranchArg, backendOverride string) error {
-	if !isBareRepository() {
-		return fmt.Errorf("run this from a bare repository")
-	}
-
 	cfg, err := loadProjectConfig()
 	if err != nil {
 		return err
+	}
+
+	// loadProjectConfig may have chdir'd from a worktree checkout up to the
+	// project root, so this has to run after it: --is-bare-repository
+	// reports false from inside a linked worktree regardless of the repo's
+	// actual core.bare, but true from the root's .bare redirect.
+	if !isBareRepository() {
+		return fmt.Errorf("run this from a bare repository")
 	}
 
 	backend, err := newSessionBackend(cfg.SessionBackend, backendOverride)

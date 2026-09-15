@@ -25,7 +25,6 @@ type session struct {
 type sessionBackend interface {
 	Kind() string
 	Has(s session) bool
-	IsCurrent(s session) bool
 	Create(s session) error
 	Kill(s session) error
 	AttachOrSwitch(s session) error

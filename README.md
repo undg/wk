@@ -126,7 +126,7 @@ wk --tmux add feat/123       # same as above, but on tmux for this run only
 
 `wk add` is the only way to create a worktree — a bare `wk <branch>` with no recognized subcommand is an error, not an implicit create (guards against typos accidentally creating worktrees).
 
-**Run every `wk` command from the project root** (next to `.bare/`), same as the bash POC requires today — `wk` does not walk up from subdirectories or worktrees to find `.wk.toml`. If it's missing in the current directory, `wk` errors out and offers to run `wk init` for you (`[y/N]`, defaults to no).
+`wk` finds the project root by walking up from cwd looking for `.wk.toml`, so any command works from inside a worktree checkout too, not just from the project root (next to `.bare/`) — `wk delete .` deletes whatever worktree you're standing in. If no `.wk.toml` turns up anywhere above cwd, `wk` errors out and offers to run `wk init` right there (`[y/N]`, defaults to no).
 
 New branches created off `base_ref` (e.g. `origin/main`) are meant to track `base_ref` immediately, so `git pull --rebase` works before you've ever pushed — but `wk` doesn't yet set this explicitly (see [[spec]]'s plan-of-action step 6+); today it only happens if your global `branch.autoSetupMerge` git config already does it, same as the old pgm-fe POC relied on. Check `git status`/`git branch -vv` after your first `wk add` in a repo to confirm tracking landed on `base_ref` before assuming it. Once you're ready to push, run `gup` — it re-points tracking from `base_ref` to the branch's own remote counterpart.
 
@@ -150,7 +150,6 @@ wk completion fish | source    # ~/.config/fish/config.fish
 
 ## 7. Known sharp edges
 
-- **Deleting your current session is refused, not survived**: `wk delete`/`wk rm` on the worktree whose session you're currently inside errors out instead of tearing it down — killing that session mid-command would kill the very process running the deletion. Run the delete from another session (or from outside herdr/tmux) instead. A "survive the session's death" flow (switch to a fallback session, finish teardown in the background) is designed in [[spec]] but not yet built.
-- **Teardown runs before removal, not after**: a repo's `teardown` steps run while the worktree still exists, right before the session is killed and the worktree is removed — not as post-removal cleanup.
+- **Deleting your current session works, but session teardown is the last step**: `wk delete .`/`wk delete <dir>` on the worktree whose session you're currently inside runs teardown, removes the worktree, deletes the branch, and prunes *before* touching the session — killing the session you're inside can't leave a half-deleted worktree behind, since by then there's nothing left to lose.
+- **Teardown runs before removal, not after**: a repo's `teardown` steps run while the worktree still exists, right after delete starts and before anything is torn down — not as post-removal cleanup.
 - **`core.hooksPath` in `setup` is redundant-but-harmless after the first run**: it's stored in the repo's shared git config (not per-worktree), so every `wk add` re-sets the same value. Safe to leave in `setup` for a fresh clone's first worktree; it just no-ops on later ones.
-- **No project detection**: `wk` only ever looks for `.wk.toml` in the current directory — there's no registry and no walk-up. Running it from inside a worktree or any other subdirectory won't find your project's config; `cd` back to the project root first.

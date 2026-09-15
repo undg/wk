@@ -33,40 +33,6 @@ func (herdrBackend) Has(s session) bool {
 	return err == nil
 }
 
-// IsCurrent guards against tearing down the workspace wk is running inside.
-// herdr injects the caller's workspace id, so this needs no socket call to
-// know where it is — only to learn what that workspace points at.
-//
-// It deliberately accepts a label match as well as a path match: a false
-// positive only refuses a delete, while a false negative kills the pty
-// running the delete.
-func (herdrBackend) IsCurrent(s session) bool {
-	if !insideHerdr() {
-		return false
-	}
-	id := os.Getenv("HERDR_WORKSPACE_ID")
-	if id == "" {
-		return false
-	}
-
-	workspaces, err := herdrWorkspaces()
-	if err != nil {
-		return false
-	}
-	dir, err := filepath.Abs(s.Dir)
-	if err != nil {
-		return false
-	}
-
-	for _, ws := range workspaces {
-		if ws.WorkspaceID != id {
-			continue
-		}
-		return ws.Worktree.CheckoutPath == dir || ws.Label == s.Name
-	}
-	return false
-}
-
 // Create registers the worktree wk already created (via git.go) as a herdr
 // workspace. It deliberately uses `worktree open`, not `worktree create` or
 // plain `workspace create --cwd`: `create` would have herdr run its own git

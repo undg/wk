@@ -62,6 +62,23 @@ type RepoConfig struct {
 
 const repoConfigFileName = ".wk.toml"
 
+// findProjectRoot walks up from start looking for the directory holding
+// .wk.toml. Worktree checkouts are direct children of the project root, so
+// this lets every command run from inside a worktree, not just the root.
+func findProjectRoot(start string) (string, error) {
+	dir := start
+	for {
+		if _, err := os.Stat(filepath.Join(dir, repoConfigFileName)); err == nil {
+			return dir, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf("no %s found above %s", repoConfigFileName, start)
+		}
+		dir = parent
+	}
+}
+
 // loadRepoConfig reads .wk.toml from dir. The returned error satisfies
 // os.IsNotExist when the file is missing, so callers can distinguish "no
 // config here" from an actual parse failure.
@@ -91,9 +108,11 @@ type ProjectConfig struct {
 	Teardown        []string
 }
 
-// loadProjectConfig detects the project root as cwd (wk is only ever run
-// from there, matching the POC's bare-repo assumption; no walk-up) and
-// merges global config with .wk.toml.
+// loadProjectConfig finds the project root by walking up from cwd looking
+// for .wk.toml, chdirs there if it isn't already cwd, and merges global
+// config with the repo's. Every command ends up running from the project
+// root regardless of which worktree it was invoked from, so the rest of wk
+// never has to think about the difference.
 func loadProjectConfig() (ProjectConfig, error) {
 	global, err := loadGlobalConfig()
 	if err != nil {
@@ -105,17 +124,26 @@ func loadProjectConfig() (ProjectConfig, error) {
 		return ProjectConfig{}, fmt.Errorf("resolving working directory: %w", err)
 	}
 
-	repo, err := loadRepoConfig(cwd)
+	root, err := findProjectRoot(cwd)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return ProjectConfig{}, offerInit(cwd)
+		return ProjectConfig{}, offerInit(cwd)
+	}
+	if root != cwd {
+		if err := os.Chdir(root); err != nil {
+			return ProjectConfig{}, fmt.Errorf("switching to project root %s: %w", root, err)
 		}
+	}
+
+	// findProjectRoot already confirmed .wk.toml exists at root, so a
+	// failure here is a real parse error, not a missing-file case.
+	repo, err := loadRepoConfig(root)
+	if err != nil {
 		return ProjectConfig{}, err
 	}
 
 	projectName := repo.Name
 	if projectName == "" {
-		projectName = filepath.Base(cwd)
+		projectName = filepath.Base(root)
 	}
 
 	baseRef := repo.BaseRef
