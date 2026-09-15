@@ -1,6 +1,11 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+)
 
 // runLs shows worktrees for the current project alongside their session
 // status (detected the same way as add/delete/clean, via .wk.toml).
@@ -10,6 +15,11 @@ func runLs(porcelain bool, backendOverride string) error {
 	cfg, err := loadProjectConfig()
 	if err != nil {
 		return err
+	}
+
+	root, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("resolving working directory: %w", err)
 	}
 
 	backend, err := newSessionBackend(cfg.SessionBackend, backendOverride)
@@ -28,6 +38,12 @@ func runLs(porcelain bool, backendOverride string) error {
 		}
 		return nil
 	}
+
+	type row struct {
+		branch, dir, session string
+	}
+	var rows []row
+	branchWidth, dirWidth := len("BRANCH"), len("WORKTREE")
 
 	for _, wt := range entries {
 		sessionName := ""
@@ -50,11 +66,31 @@ func runLs(porcelain bool, backendOverride string) error {
 		if branch == "" {
 			branch = "(detached)"
 		}
-		session := "no " + backend.Kind() + " session"
-		if sessionName != "" {
-			session = backend.Kind() + ": " + sessionName
+
+		// Worktree dirs are siblings of the project root, so this is
+		// usually just the dir's basename — far more readable than the
+		// absolute path git hands back.
+		dir := wt.Dir
+		if rel, err := filepath.Rel(root, wt.Dir); err == nil && !strings.HasPrefix(rel, "..") {
+			dir = rel
 		}
-		fmt.Printf("%-30s %-40s %s\n", branch, wt.Dir, session)
+
+		rows = append(rows, row{branch: branch, dir: dir, session: sessionName})
+		branchWidth = max(branchWidth, len(branch))
+		dirWidth = max(dirWidth, len(dir))
+	}
+
+	if porcelain {
+		return nil
+	}
+
+	fmt.Printf("%s%-*s  %-*s  %s%s\n", colorBlue, branchWidth, "BRANCH", dirWidth, "WORKTREE", "SESSION", colorReset)
+	for _, r := range rows {
+		session := colorRed + "no " + backend.Kind() + " session" + colorReset
+		if r.session != "" {
+			session = colorGreen + backend.Kind() + ": " + r.session + colorReset
+		}
+		fmt.Printf("%-*s  %-*s  %s\n", branchWidth, r.branch, dirWidth, r.dir, session)
 	}
 	return nil
 }
