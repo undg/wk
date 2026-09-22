@@ -21,6 +21,11 @@ install: build
 test:
 	go test -v -race -buildvcs ./...
 
+## e2e: run compiled-binary end-to-end tests
+.PHONY: e2e
+e2e:
+	go test -run '^TestE2E' -count=1
+
 ## tidy: format code and tidy modfile
 .PHONY: tidy
 tidy:

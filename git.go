@@ -52,21 +52,39 @@ func fetchMissingBaseRef(baseRef string) {
 	_ = runGitInherit("fetch", remote, refspec)
 }
 
-// worktreeAddNew creates branch at base in a new worktree. When base is the
-// remote branch of the same name, track makes it the upstream: git's own
-// DWIM would do that for `git worktree add <dir> <branch>`, but never fires
-// here because wk always passes -b explicitly, and without --track the
-// branch starts at the right commit with no upstream to push to.
-func worktreeAddNew(dir, branch, base string, track bool) error {
-	args := []string{"worktree", "add"}
-	if track {
-		args = append(args, "--track")
-	}
-	return runGitInherit(append(args, "-b", branch, dir, base)...)
+// worktreeAddNew creates a branch at base in a new worktree. Tracking is
+// configured afterwards: `git worktree add --track -b` rejects the remote
+// branch layout produced by `git clone --bare`, which is wk's documented
+// repository setup.
+func worktreeAddNew(dir, branch, base string) error {
+	return runGitInherit("worktree", "add", "-b", branch, dir, base)
 }
 
 func worktreeAddExisting(dir, branch string) error {
 	return runGitInherit("worktree", "add", dir, branch)
+}
+
+func setBranchUpstream(branch, upstream string) error {
+	if _, err := runGit("branch", "--set-upstream-to="+upstream, branch); err == nil {
+		return nil
+	}
+
+	// `git clone --bare` maps a remote's branches straight into local heads,
+	// rather than configuring refs/remotes/<remote>/* as normal clones do.
+	// Materialize the equivalent remote-tracking ref from the just-created
+	// local branch, then configure the usual fetch mapping so Git recognizes
+	// it as a valid upstream.
+	remote, remoteBranch, ok := strings.Cut(upstream, "/")
+	if !ok || remote == "" || remoteBranch == "" {
+		return fmt.Errorf("invalid remote upstream: %s", upstream)
+	}
+	if err := runGitInherit("config", "remote."+remote+".fetch", "+refs/heads/*:refs/remotes/"+remote+"/*"); err != nil {
+		return err
+	}
+	if err := runGitInherit("update-ref", "refs/remotes/"+remote+"/"+remoteBranch, "refs/heads/"+branch); err != nil {
+		return err
+	}
+	return runGitInherit("branch", "--set-upstream-to="+upstream, branch)
 }
 
 func worktreeRemove(dir string) error {

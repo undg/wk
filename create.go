@@ -78,10 +78,19 @@ func runCreate(rawBranchArg, backendOverride string) error {
 		logInfo("branch already exists, reusing: %s", rawBranch)
 		err = worktreeAddExisting(worktreeDir, rawBranch)
 	} else {
-		err = worktreeAddNew(worktreeDir, rawBranch, baseRef, trackRemote)
+		err = worktreeAddNew(worktreeDir, rawBranch, baseRef)
 	}
 	if err != nil {
 		return fmt.Errorf("git worktree add failed: %w", err)
+	}
+	// A bare clone commonly has remote branch names as local refs already.
+	// In that case worktreeAddExisting is the only valid checkout operation,
+	// but it does not set an upstream itself. Explicit remote checkouts must
+	// still track their requested origin branch.
+	if trackRemote {
+		if err := setBranchUpstream(rawBranch, baseRef); err != nil {
+			return fmt.Errorf("setting branch upstream failed: %w", err)
+		}
 	}
 
 	if len(cfg.Setup) > 0 {
