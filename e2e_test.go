@@ -308,6 +308,31 @@ session_backend = "tmux"
 	mustEqual(t, gitOutput(t, defaults, defaults.root, "rev-parse", "feat/default"), gitOutput(t, defaults, defaults.root, "rev-parse", "origin/main"))
 }
 
+func TestE2EAddResumesAfterSessionCreationFails(t *testing.T) {
+	p := newE2EProject(t, `setup = ["printf setup >> setup.marker"]
+`)
+
+	// Simulates Herdr needing a restart. Git and setup complete before the
+	// backend fails, so the next identical add must only retry the backend.
+	mustWriteFile(t, filepath.Join(p.fakeState, "herdr-open-fail"), "fail\n")
+	first := p.run("", "add", "origin/explicit-remote")
+	mustFail(t, first)
+	mustContain(t, first.output, "creating herdr session failed")
+
+	dir := filepath.Join(p.root, "explicit-remote")
+	mustDir(t, dir)
+	mustEqual(t, mustReadFile(t, filepath.Join(dir, "setup.marker")), "setup")
+
+	if err := os.Remove(filepath.Join(p.fakeState, "herdr-open-fail")); err != nil {
+		t.Fatal(err)
+	}
+	second := p.run("", "add", "origin/explicit-remote")
+	mustSucceed(t, second)
+	mustContain(t, second.output, "resuming existing worktree")
+	mustEqual(t, mustReadFile(t, filepath.Join(dir, "setup.marker")), "setup")
+	mustContain(t, mustReadFile(t, filepath.Join(p.fakeState, "herdr-workspaces")), "explicit-remote")
+}
+
 func TestE2EDeleteAcceptedTargetsAndTeardown(t *testing.T) {
 	p := newE2EProject(t, `name = "cave"
 setup = ["printf setup > setup.marker"]
@@ -441,6 +466,10 @@ if [ "$1" = workspace ] && [ "$2" = list ]; then
   exit 0
 fi
 if [ "$1" = worktree ] && [ "$2" = open ]; then
+  if [ -f "$WK_FAKE_STATE/herdr-open-fail" ]; then
+    echo "herdr is unavailable" >&2
+    exit 1
+  fi
   shift 2
   path= label=
   while [ "$#" -gt 0 ]; do

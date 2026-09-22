@@ -126,6 +126,8 @@ wk --tmux add feat/123       # same as above, but on tmux for this run only
 
 `wk add` is the only way to create a worktree — a bare `wk <branch>` with no recognized subcommand is an error, not an implicit create (guards against typos accidentally creating worktrees).
 
+If a prior `wk add` failed, run the same command again. `wk` verifies that the existing directory is the expected Git worktree and resumes incomplete work. It checkpoints successful `setup` in Git's per-worktree metadata, so a later Herdr/tmux failure retries only the session step; a failed `setup` has no checkpoint and is run again. An existing directory that is not the expected registered worktree, or belongs to another branch, remains an error.
+
 `wk` finds the project root by walking up from cwd looking for `.wk.toml`, so any command works from inside a worktree checkout too, not just from the project root (next to `.bare/`) — `wk delete .` deletes whatever worktree you're standing in. If no `.wk.toml` turns up anywhere above cwd, `wk` errors out and offers to run `wk init` right there (`[y/N]`, defaults to no).
 
 New branches created off `base_ref` (e.g. `origin/main`) are meant to track `base_ref` immediately, so `git pull --rebase` works before you've ever pushed — but `wk` doesn't yet set this explicitly (see [[spec]]'s plan-of-action step 6+); today it only happens if your global `branch.autoSetupMerge` git config already does it, same as the old pgm-fe POC relied on. Check `git status`/`git branch -vv` after your first `wk add` in a repo to confirm tracking landed on `base_ref` before assuming it. Once you're ready to push, run `gup` — it re-points tracking from `base_ref` to the branch's own remote counterpart.

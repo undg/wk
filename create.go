@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -65,39 +66,57 @@ func runCreate(rawBranchArg, backendOverride string) error {
 		return fmt.Errorf("base reference not found: %s (tip: pass main, origin/main, or origin/someone-branch)", baseRef)
 	}
 
-	if _, err := os.Stat(worktreeDir); err == nil {
-		return fmt.Errorf("worktree path already exists: %s", worktreeDir)
-	}
-
-	if backend.Has(sess) {
-		return fmt.Errorf("%s session already exists: %s", backend.Kind(), sess.Name)
-	}
-
-	logStep("creating worktree")
-	if branchExists(rawBranch) {
-		logInfo("branch already exists, reusing: %s", rawBranch)
-		err = worktreeAddExisting(worktreeDir, rawBranch)
-	} else {
-		err = worktreeAddNew(worktreeDir, rawBranch, baseRef)
-	}
+	reusingWorktree, err := reusableWorktree(worktreeDir, rawBranch)
 	if err != nil {
-		return fmt.Errorf("git worktree add failed: %w", err)
+		return err
 	}
+
+	if reusingWorktree {
+		logInfo("resuming existing worktree: %s", worktreeDir)
+	} else {
+		logStep("creating worktree")
+		if branchExists(rawBranch) {
+			logInfo("branch already exists, reusing: %s", rawBranch)
+			err = worktreeAddExisting(worktreeDir, rawBranch)
+		} else {
+			err = worktreeAddNew(worktreeDir, rawBranch, baseRef)
+		}
+		if err != nil {
+			return fmt.Errorf("git worktree add failed: %w", err)
+		}
+	}
+
 	// A bare clone commonly has remote branch names as local refs already.
 	// In that case worktreeAddExisting is the only valid checkout operation,
 	// but it does not set an upstream itself. Explicit remote checkouts must
-	// still track their requested origin branch.
+	// still track their requested origin branch. It is harmless to repeat when
+	// resuming after a later failure, and lets a retry repair this step too.
 	if trackRemote {
 		if err := setBranchUpstream(rawBranch, baseRef); err != nil {
 			return fmt.Errorf("setting branch upstream failed: %w", err)
 		}
 	}
 
-	if len(cfg.Setup) > 0 {
-		logStep("running setup steps")
-		if err := runShellSteps(worktreeDir, cfg.Setup); err != nil {
+	sessionExists := backend.Has(sess)
+	if len(cfg.Setup) > 0 && !sessionExists {
+		setupDone, err := setupComplete(worktreeDir)
+		if err != nil {
 			return err
 		}
+		if !setupDone {
+			logStep("running setup steps")
+			if err := runShellSteps(worktreeDir, cfg.Setup); err != nil {
+				return err
+			}
+			if err := markSetupComplete(worktreeDir); err != nil {
+				return err
+			}
+		}
+	}
+
+	if sessionExists {
+		logInfo("%s session already exists, attaching: %s", backend.Kind(), sess.Name)
+		return backend.AttachOrSwitch(sess)
 	}
 
 	logStep("starting %s session: %s", backend.Kind(), sess.Name)
@@ -106,4 +125,83 @@ func runCreate(rawBranchArg, backendOverride string) error {
 	}
 
 	return backend.AttachOrSwitch(sess)
+}
+
+// setupComplete and markSetupComplete keep the checkpoint in Git's per-worktree
+// metadata, rather than adding a wk file to the user's checkout. A failed setup
+// has no checkpoint, so a retry runs it again; a later backend failure does.
+func setupComplete(dir string) (bool, error) {
+	path, err := setupCheckpointPath(dir)
+	if err != nil {
+		return false, err
+	}
+	_, err = os.Stat(path)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("checking setup checkpoint: %w", err)
+	}
+	return true, nil
+}
+
+func markSetupComplete(dir string) error {
+	path, err := setupCheckpointPath(dir)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, []byte("complete\n"), 0o600); err != nil {
+		return fmt.Errorf("writing setup checkpoint: %w", err)
+	}
+	return nil
+}
+
+func setupCheckpointPath(dir string) (string, error) {
+	gitDir, err := runGit("-C", dir, "rev-parse", "--git-dir")
+	if err != nil {
+		return "", fmt.Errorf("finding git metadata for worktree %s: %w", dir, err)
+	}
+	if !filepath.IsAbs(gitDir) {
+		gitDir = filepath.Join(dir, gitDir)
+	}
+	return filepath.Join(gitDir, "wk-setup-complete"), nil
+}
+
+// reusableWorktree reports whether dir is the worktree wk would have created
+// for branch. A plain existing directory, or a worktree for another branch,
+// is unsafe to adopt and remains an error.
+func reusableWorktree(dir, branch string) (bool, error) {
+	info, err := os.Stat(dir)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("checking worktree path %s: %w", dir, err)
+	}
+	if !info.IsDir() {
+		return false, fmt.Errorf("worktree path is not a directory: %s", dir)
+	}
+
+	want, err := filepath.Abs(dir)
+	if err != nil {
+		return false, fmt.Errorf("resolving worktree path %s: %w", dir, err)
+	}
+	entries, err := listWorktrees()
+	if err != nil {
+		return false, err
+	}
+	for _, entry := range entries {
+		got, err := filepath.Abs(entry.Dir)
+		if err != nil {
+			return false, fmt.Errorf("resolving registered worktree path %s: %w", entry.Dir, err)
+		}
+		if got != want {
+			continue
+		}
+		if entry.Branch != branch {
+			return false, fmt.Errorf("worktree path already belongs to branch %s: %s", entry.Branch, dir)
+		}
+		return true, nil
+	}
+	return false, fmt.Errorf("worktree path already exists but is not a registered git worktree: %s", dir)
 }
