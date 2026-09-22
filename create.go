@@ -84,6 +84,9 @@ func runCreate(rawBranchArg, backendOverride string) error {
 		if err != nil {
 			return fmt.Errorf("git worktree add failed: %w", err)
 		}
+		if err := markSetupPending(worktreeDir); err != nil {
+			return err
+		}
 	}
 
 	// A bare clone commonly has remote branch names as local refs already.
@@ -99,11 +102,12 @@ func runCreate(rawBranchArg, backendOverride string) error {
 
 	sessionExists := backend.Has(sess)
 	if len(cfg.Setup) > 0 && !sessionExists {
-		setupDone, err := setupComplete(worktreeDir)
+		setupState, err := readSetupState(worktreeDir)
 		if err != nil {
 			return err
 		}
-		if !setupDone {
+		switch setupState {
+		case setupPending:
 			logStep("running setup steps")
 			if err := runShellSteps(worktreeDir, cfg.Setup); err != nil {
 				return err
@@ -111,6 +115,11 @@ func runCreate(rawBranchArg, backendOverride string) error {
 			if err := markSetupComplete(worktreeDir); err != nil {
 				return err
 			}
+		case setupUnknown:
+			// Worktrees created before resumable adds have no checkpoint. Their
+			// setup may already have completed, and arbitrary setup is often not
+			// idempotent (for example, ln -s), so the safe migration is to skip it.
+			logInfo("existing worktree has no setup checkpoint, not rerunning setup")
 		}
 	}
 
@@ -127,30 +136,44 @@ func runCreate(rawBranchArg, backendOverride string) error {
 	return backend.AttachOrSwitch(sess)
 }
 
-// setupComplete and markSetupComplete keep the checkpoint in Git's per-worktree
-// metadata, rather than adding a wk file to the user's checkout. A failed setup
-// has no checkpoint, so a retry runs it again; a later backend failure does.
-func setupComplete(dir string) (bool, error) {
+type setupCheckpoint string
+
+const (
+	// setupUnknown is for worktrees made before resumable adds. It is unsafe to
+	// assume their setup can be repeated.
+	setupUnknown  setupCheckpoint = ""
+	setupPending  setupCheckpoint = "pending"
+	setupComplete setupCheckpoint = "complete"
+)
+
+// Setup checkpoints live in Git's per-worktree metadata, rather than adding a
+// wk file to the user's checkout. New worktrees are marked pending before setup
+// starts, so a failed setup retries. Unmarked legacy worktrees are left alone.
+func readSetupState(dir string) (setupCheckpoint, error) {
 	path, err := setupCheckpointPath(dir)
 	if err != nil {
-		return false, err
+		return setupUnknown, err
 	}
-	_, err = os.Stat(path)
+	content, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		return false, nil
+		return setupUnknown, nil
 	}
 	if err != nil {
-		return false, fmt.Errorf("checking setup checkpoint: %w", err)
+		return setupUnknown, fmt.Errorf("reading setup checkpoint: %w", err)
 	}
-	return true, nil
+	return setupCheckpoint(strings.TrimSpace(string(content))), nil
 }
 
-func markSetupComplete(dir string) error {
+func markSetupPending(dir string) error { return writeSetupCheckpoint(dir, setupPending) }
+
+func markSetupComplete(dir string) error { return writeSetupCheckpoint(dir, setupComplete) }
+
+func writeSetupCheckpoint(dir string, state setupCheckpoint) error {
 	path, err := setupCheckpointPath(dir)
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(path, []byte("complete\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(state+"\n"), 0o600); err != nil {
 		return fmt.Errorf("writing setup checkpoint: %w", err)
 	}
 	return nil

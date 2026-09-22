@@ -333,6 +333,20 @@ func TestE2EAddResumesAfterSessionCreationFails(t *testing.T) {
 	mustContain(t, mustReadFile(t, filepath.Join(p.fakeState, "herdr-workspaces")), "explicit-remote")
 }
 
+func TestE2EAddDoesNotRerunSetupForLegacyWorktree(t *testing.T) {
+	p := newE2EProject(t, `setup = ["printf setup > setup.marker"]
+`)
+	dir := filepath.Join(p.root, "explicit-remote")
+	testGit(t, p.root, "worktree", "add", dir, "explicit-remote")
+
+	got := p.run("", "add", "origin/explicit-remote")
+	mustSucceed(t, got)
+	mustContain(t, got.output, "existing worktree has no setup checkpoint")
+	if _, err := os.Stat(filepath.Join(dir, "setup.marker")); !os.IsNotExist(err) {
+		t.Fatalf("legacy worktree unexpectedly ran setup: %v", err)
+	}
+}
+
 func TestE2EDeleteAcceptedTargetsAndTeardown(t *testing.T) {
 	p := newE2EProject(t, `name = "cave"
 setup = ["printf setup > setup.marker"]

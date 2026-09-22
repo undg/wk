@@ -126,7 +126,7 @@ wk --tmux add feat/123       # same as above, but on tmux for this run only
 
 `wk add` is the only way to create a worktree — a bare `wk <branch>` with no recognized subcommand is an error, not an implicit create (guards against typos accidentally creating worktrees).
 
-If a prior `wk add` failed, run the same command again. `wk` verifies that the existing directory is the expected Git worktree and resumes incomplete work. It checkpoints successful `setup` in Git's per-worktree metadata, so a later Herdr/tmux failure retries only the session step; a failed `setup` has no checkpoint and is run again. An existing directory that is not the expected registered worktree, or belongs to another branch, remains an error.
+If a prior `wk add` failed, run the same command again. `wk` verifies that the existing directory is the expected Git worktree and resumes incomplete work. New worktrees are checkpointed in Git's per-worktree metadata before `setup` starts: a failed setup is retried, while a later Herdr/tmux failure retries only the session step. Worktrees created before this behavior have no checkpoint, so `wk` safely skips their potentially non-idempotent setup and resumes the session instead. An existing directory that is not the expected registered worktree, or belongs to another branch, remains an error.
 
 `wk` finds the project root by walking up from cwd looking for `.wk.toml`, so any command works from inside a worktree checkout too, not just from the project root (next to `.bare/`) — `wk delete .` deletes whatever worktree you're standing in. If no `.wk.toml` turns up anywhere above cwd, `wk` errors out and offers to run `wk init` right there (`[y/N]`, defaults to no).
 
