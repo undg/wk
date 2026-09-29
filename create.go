@@ -130,6 +130,13 @@ func runCreate(rawBranchArg, backendOverride string) error {
 
 	logStep("starting %s session: %s", backend.Kind(), sess.Name)
 	if err := backend.Create(sess); err != nil {
+		// herdr rejects worktree open when the calling pane's workspace is
+		// itself a linked worktree (linked_worktree_source). Working around it
+		// means leaning on undocumented herdr source inference, so just point
+		// the user at the retry: the worktree and setup are already done.
+		if backend.Kind() == backendHerdr && insideHerdr() {
+			logInfo("tip: herdr won't open a worktree from a linked-worktree pane — rerun wk from the repo root pane, or outside herdr; the worktree is ready")
+		}
 		return fmt.Errorf("creating %s session failed: %w", backend.Kind(), err)
 	}
 
