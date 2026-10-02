@@ -1,0 +1,113 @@
+.TH WK 1 "2026-10-01" "wk" "User Commands"
+.SH NAME
+wk \- manage Git worktrees and their development sessions
+.SH SYNOPSIS
+.B wk
+.RI [ --herdr | --tmux | --backend " backend" ]
+.I command
+.RI [ arguments ]
+.SH DESCRIPTION
+.B wk
+manages a project arranged as one bare Git repository with one linked worktree
+per branch.  It starts and manages a Herdr workspace by default, or a tmux
+session when configured or requested.
+.PP
+Run commands from the project root or from any worktree.  The project root
+contains a
+.I .wk.toml
+file and normally a
+.I .bare
+Git directory.
+.SH COMMANDS
+.TP
+.BI add " branch-name"
+Create a worktree for a new branch based on the configured base ref.  If
+.I origin/branch-name
+exists, check it out and track it instead.
+.TP
+.BI add " origin/branch-name"
+Create a worktree with a local branch named
+.I branch-name
+that tracks the specified remote branch.
+.TP
+.BI delete " worktree-dir"
+Remove a worktree and its session, delete its branch, and prune stale
+worktree metadata.
+.I rm
+is an alias.  The argument may be a worktree directory, branch name, or
+.B .
+for the current worktree.
+.TP
+.B clean
+Offer to remove worktrees whose pull request has merged.  This command uses
+.BR gh (1)
+to look up pull-request state.
+.TP
+.B ls
+Show the project's worktrees and session status.
+.TP
+.B ls --porcelain
+Print parse-friendly three-line blocks: branch, directory, and session.
+.TP
+.B init
+Create a starter
+.I .wk.toml
+in the current directory.
+.TP
+.BI completion " zsh|bash|fish"
+Print the shell completion script for the selected shell.
+.TP
+.BR version , " -v" , " --version"
+Print the wk version.
+.TP
+.BR help , " -h" , " --help"
+Print command help.
+.SH OPTIONS
+.TP
+.B --herdr
+Use the Herdr session backend for this invocation.  This is the default unless
+configured otherwise.
+.TP
+.B --tmux
+Use the tmux session backend for this invocation.
+.TP
+.BI --backend " herdr|tmux"
+Equivalent to the matching short backend option.  Backend options may appear
+before or after the command; if more than one is supplied, the last one wins.
+.SH FILES
+.TP
+.I .wk.toml
+Per-project configuration.  Its optional fields are
+.BR name ,
+.BR base_ref ,
+.BR setup ,
+and
+.BR teardown .
+.TP
+.I ~/.config/wk/config.toml
+Global configuration.  The supported fields are
+.BR default_base_ref ,
+.BR session_template ,
+and
+.BR session_backend .
+.SH DEPENDENCIES
+.B wk
+requires Git.  It requires Herdr for the default backend or tmux when that
+backend is selected.  The
+.B clean
+command additionally needs the GitHub CLI,
+.BR gh (1).
+Commands in a project's
+.B setup
+or
+.B teardown
+configuration are run by
+.BR sh (1).
+.SH EXIT STATUS
+.B wk
+exits with status 0 on success and non-zero if a command fails or its arguments
+are invalid.
+.SH SEE ALSO
+.BR git (1),
+.BR tmux (1),
+.BR gh (1)

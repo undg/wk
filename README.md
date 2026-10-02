@@ -11,6 +11,28 @@ created: 2026-08-26
 
 > **Status**: the Go binary is implemented and replaces the old bash POC (`wk-pgm-fe.sh` + `wk-delete-merged.sh`). See [[spec]] for the full design and remaining plan-of-action items.
 
+## Installation
+
+Building requires Go 1.24.5 or newer. At runtime, `wk` needs Git and the selected session backend: [herdr](https://herdr.dev) by default or tmux. `wk clean` also needs the GitHub CLI (`gh`).
+
+```sh
+make
+sudo make install                    # installs to /usr/local by default
+make install PREFIX="$HOME/.local"   # user-local install; no sudo
+man wk
+```
+
+`make install` installs both `wk` and `wk.1`. Use the same variables to remove them:
+
+```sh
+sudo make uninstall
+make uninstall PREFIX="$HOME/.local"
+```
+
+For package staging, set `DESTDIR` while retaining the final `PREFIX`, for example `make install DESTDIR="$pkgdir" PREFIX=/usr`.
+
+The Makefile uses portable POSIX tooling available on macOS and Linux. No `./configure` script is needed. The only usual platform difference is the installation prefix chosen by the system or package manager.
+
 ## 1. Setting up a new bare repo
 
 New projects use the `.bare/`-wrapper convention (the older bare-root-is-project-root layout, still used by `pgm-fe`, is kept only for backward compatibility — don't use it for new projects):
@@ -157,4 +179,5 @@ wk completion fish | source    # ~/.config/fish/config.fish
 - **Teardown runs before removal, not after**: a repo's `teardown` steps run while the worktree still exists, right after delete starts and before anything is torn down — not as post-removal cleanup.
 - **`core.hooksPath` in `setup` is redundant-but-harmless after the first run**: it's stored in the repo's shared git config (not per-worktree), so every `wk add` re-sets the same value. Safe to leave in `setup` for a fresh clone's first worktree; it just no-ops on later ones.
 - **herdr: `wk add` from a linked-worktree pane fails at the session step**: herdr picks the caller's pane as the "source" workspace for `worktree open` and rejects it with `linked_worktree_source` when that workspace is itself a linked worktree (e.g. the `main` checkout). `wk` strips `$HERDR_WORKSPACE_ID`, but herdr still infers the source by other means. The worktree and setup are already done at that point, so rerun `wk add <branch>` from the repo-root pane or from outside herdr and it resumes straight to the session. Not worked around in code: the fix would depend on undocumented herdr source inference.
+- **herdr: another repo open in a pane can become the source for `wk add`**: observed with the shell in `pgm-gh-flow` while `pgm-github-workflows` was open in another pane. Herdr selected the other clone as its source and returned `worktree_not_found`, even though Git had created the requested worktree successfully. Changing the shell directory and stripping `$HERDR_WORKSPACE_ID` were not enough. Compare `env -u HERDR_WORKSPACE_ID herdr worktree list` with `env -u HERDR_WORKSPACE_ID herdr worktree list --cwd "$PWD"` from the intended repo root; check `source.repo_root` in the replies. An explicit `--cwd` selected the correct repo and listed its worktrees. Current `wk` does not pass this flag when opening a worktree; try opening the existing checkout with `env -u HERDR_WORKSPACE_ID herdr worktree open --cwd "$PWD" --path "$PWD/<worktree-dir>" --focus`. Do not recreate the Git worktree. Keeping one repo per Herdr workspace is a precaution, not a confirmed restriction: the exact pane/workspace/window inference boundary is unverified. The linked-worktree tip printed by `wk` is generic and does not diagnose this error.
 - **`setup` runs in the foreground, in the pane you called `wk` from**: you're stuck in that pane until setup finishes, and the session is created only afterwards. Running setup inside the new session instead would free the pane, but `wk` would lose sight of setup failures and its checkpoint, and it wouldn't help the linked-worktree case above (the session step is what fails).

@@ -1,5 +1,11 @@
 BINARY_NAME := wk
-INSTALL_PATH := ~/.dot/bin/bin/$(BINARY_NAME)
+MANPAGE := $(BINARY_NAME).1
+PREFIX ?= /usr/local
+BINDIR ?= $(PREFIX)/bin
+MANDIR ?= $(PREFIX)/share/man
+MAN1DIR ?= $(MANDIR)/man1
+DESTDIR ?=
+INSTALL ?= install
 DIRTY := $(shell test -z "$$(git status --porcelain 2>/dev/null)" || echo -dirty)
 VERSION := $(shell git describe --tags --always 2>/dev/null || echo dev)$(DIRTY)
 
@@ -12,9 +18,17 @@ help:
 build:
 	go build -ldflags "-X main.version=$(VERSION)" -o bin/$(BINARY_NAME) .
 
-## install: build the binary; ~/.dot/bin/bin/wk is a symlink into bin/, so build already deploys it
+## install: install wk and its man page (override PREFIX or DESTDIR as needed)
 .PHONY: install
 install: build
+	$(INSTALL) -d "$(DESTDIR)$(BINDIR)" "$(DESTDIR)$(MAN1DIR)"
+	$(INSTALL) -m 755 bin/$(BINARY_NAME) "$(DESTDIR)$(BINDIR)/$(BINARY_NAME)"
+	$(INSTALL) -m 644 $(MANPAGE) "$(DESTDIR)$(MAN1DIR)/$(MANPAGE)"
+
+## uninstall: remove wk and its man page (use the same PREFIX and DESTDIR as install)
+.PHONY: uninstall
+uninstall:
+	$(RM) "$(DESTDIR)$(BINDIR)/$(BINARY_NAME)" "$(DESTDIR)$(MAN1DIR)/$(MANPAGE)"
 
 ## test: run all tests
 .PHONY: test
