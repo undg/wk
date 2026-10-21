@@ -16,7 +16,6 @@ created: 2026-08-26
 Building requires Go 1.24.5 or newer. At runtime, `wk` needs Git and the selected session backend: [herdr](https://herdr.dev) by default or tmux. `wk clean` also needs the GitHub CLI (`gh`).
 
 ```sh
-make
 sudo make install                    # installs to /usr/local by default
 make install PREFIX="$HOME/.local"   # user-local install; no sudo
 man wk
@@ -135,6 +134,7 @@ Two workspaces on a single worktree is refused rather than guessed at — closin
 wk add feat/123/add-btn      # create a worktree + branch off base_ref, start a session
 wk add someone-branch        # existing origin/someone-branch? check it out and track it
 wk add origin/someone-branch # same, spelled explicitly
+wk add origin/someone-branch rev # Herdr label: [rev] someone-branch [project]
 gup                          # once ready to push: git push -u <remote> <branch>, re-points tracking
 wk delete <dir>              # tear down a worktree + its session (alias: wk rm <dir>)
 wk clean                     # sweep worktrees whose branch's PR is merged, offering to delete each
@@ -145,6 +145,8 @@ wk --tmux add feat/123       # same as above, but on tmux for this run only
 ```
 
 `wk add <name>` with no `origin/` prefix checks whether `origin/<name>` already exists: if it does, the worktree checks that branch out and tracks it (shell completion offers exactly these names); if it doesn't, `<name>` is a new branch off `base_ref`.
+
+`wk add <branch> [badge]` accepts an optional display-only badge for Herdr. The badge prefixes the configured session label; the existing project suffix stays intact. Supplying another badge replaces the label with `[badge] <rendered session_template>`, including for an already-open workspace. Omitting the badge leaves an existing label unchanged. Branch names, worktree paths, upstreams, and deletion by branch/path/`.` are unaffected. Badges live only in Herdr's label: to recreate a closed workspace with its badge, supply it again. Badges are not supported by the tmux backend.
 
 `wk add` is the only way to create a worktree — a bare `wk <branch>` with no recognized subcommand is an error, not an implicit create (guards against typos accidentally creating worktrees).
 

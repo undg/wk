@@ -52,7 +52,11 @@ func runLs(porcelain bool, backendOverride string) error {
 				Name: sessionNameFromTemplate(cfg.SessionTemplate, wt.Branch, cfg.ProjectName),
 				Dir:  wt.Dir,
 			}
-			if backend.Has(candidate) {
+			if backend.Kind() == backendHerdr {
+				if ws, err := herdrWorkspaceFor(wt.Dir); err == nil {
+					sessionName = ws.Label
+				}
+			} else if backend.Has(candidate) {
 				sessionName = candidate.Name
 			}
 		}

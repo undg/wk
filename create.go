@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-func runCreate(rawBranchArg, backendOverride string) error {
+func runCreate(rawBranchArg, badge, backendOverride string) error {
 	cfg, err := loadProjectConfig()
 	if err != nil {
 		return err
@@ -24,6 +24,10 @@ func runCreate(rawBranchArg, backendOverride string) error {
 	backend, err := newSessionBackend(cfg.SessionBackend, backendOverride)
 	if err != nil {
 		return err
+	}
+
+	if badge != "" && backend.Kind() != backendHerdr {
+		return fmt.Errorf("workspace badges require the herdr backend")
 	}
 
 	rawBranch := rawBranchArg
@@ -51,6 +55,10 @@ func runCreate(rawBranchArg, backendOverride string) error {
 	sess := session{
 		Name: sessionNameFromTemplate(cfg.SessionTemplate, rawBranch, cfg.ProjectName),
 		Dir:  worktreeDir,
+	}
+
+	if badge != "" {
+		sess.Name = "[" + badge + "] " + sess.Name
 	}
 
 	logInfo("create mode")
@@ -124,6 +132,11 @@ func runCreate(rawBranchArg, backendOverride string) error {
 	}
 
 	if sessionExists {
+		if badge != "" {
+			if err := (herdrBackend{}).Rename(sess); err != nil {
+				return fmt.Errorf("renaming herdr workspace failed: %w", err)
+			}
+		}
 		logInfo("%s session already exists, attaching: %s", backend.Kind(), sess.Name)
 		return backend.AttachOrSwitch(sess)
 	}

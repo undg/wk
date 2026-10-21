@@ -308,6 +308,62 @@ session_backend = "tmux"
 	mustEqual(t, gitOutput(t, defaults, defaults.root, "rev-parse", "feat/default"), gitOutput(t, defaults, defaults.root, "rev-parse", "origin/main"))
 }
 
+func TestE2EHerdrBadgeCreatesUpdatesAndPreservesLabel(t *testing.T) {
+	p := newE2EProject(t, `name = "cave"
+setup = ["printf setup >> setup.marker"]
+`)
+	state := filepath.Join(p.fakeState, "herdr-workspaces")
+	dir := filepath.Join(p.root, "explicit-remote")
+
+	mustSucceed(t, p.run("", "add", "origin/explicit-remote", "rev"))
+	mustContain(t, mustReadFile(t, state), "[rev] explicit-remote [cave]")
+	mustEqual(t, gitOutput(t, p, dir, "branch", "--show-current"), "explicit-remote")
+	mustEqual(t, gitOutput(t, p, dir, "rev-parse", "--abbrev-ref", "@{upstream}"), "origin/explicit-remote")
+
+	renameFailure := filepath.Join(p.fakeState, "herdr-rename-fail")
+	mustWriteFile(t, renameFailure, "fail\n")
+	got := p.run("", "add", "explicit-remote", "wip")
+	mustFail(t, got)
+	mustContain(t, got.output, "renaming herdr workspace failed")
+	mustContain(t, mustReadFile(t, state), "[rev] explicit-remote [cave]")
+	if err := os.Remove(renameFailure); err != nil {
+		t.Fatal(err)
+	}
+	mustSucceed(t, p.run("", "add", "explicit-remote", "wip"))
+	mustContain(t, mustReadFile(t, state), "[wip] explicit-remote [cave]")
+	mustNotContain(t, mustReadFile(t, state), "[rev]")
+	if count := strings.Count(mustReadFile(t, state), "\n"); count != 1 {
+		t.Fatalf("badge update created duplicate workspaces: %d", count)
+	}
+	mustEqual(t, mustReadFile(t, filepath.Join(dir, "setup.marker")), "setup")
+
+	mustSucceed(t, p.run("", "add", "explicit-remote"))
+	mustContain(t, mustReadFile(t, state), "[wip] explicit-remote [cave]")
+	listing := p.run("", "ls", "--porcelain")
+	mustSucceed(t, listing)
+	mustContain(t, listing.output, "[wip] explicit-remote [cave]")
+
+	mustSucceed(t, p.runAt(dir, "", "delete", "."))
+	mustEqual(t, mustReadFile(t, state), "")
+}
+
+func TestE2EHerdrBadgeUsesCustomTemplateAndLeavesTmuxUnchanged(t *testing.T) {
+	p := newE2EProject(t, "")
+	p.writeGlobal("session_template = \"S-{project}-{branch}\"\n")
+	mustSucceed(t, p.run("", "add", "feat/review", "rev"))
+	mustContain(t, mustReadFile(t, filepath.Join(p.fakeState, "herdr-workspaces")), "[rev] S-project-feat/review")
+	mustSucceed(t, p.run("", "delete", "feat/review"))
+
+	got := p.run("", "add", "feat/tmux", "rev", "--tmux")
+	mustFail(t, got)
+	mustContain(t, got.output, "workspace badges require the herdr backend")
+	if _, err := os.Stat(filepath.Join(p.root, "feat-tmux")); !os.IsNotExist(err) {
+		t.Fatalf("rejected badge created a worktree: %v", err)
+	}
+	mustSucceed(t, p.run("", "add", "feat/tmux", "--tmux"))
+	mustContain(t, mustReadFile(t, filepath.Join(p.fakeState, "tmux-sessions")), "S-project-feat/tmux")
+}
+
 func TestE2EAddResumesAfterSessionCreationFails(t *testing.T) {
 	p := newE2EProject(t, `setup = ["printf setup >> setup.marker"]
 `)
@@ -315,7 +371,7 @@ func TestE2EAddResumesAfterSessionCreationFails(t *testing.T) {
 	// Simulates Herdr needing a restart. Git and setup complete before the
 	// backend fails, so the next identical add must only retry the backend.
 	mustWriteFile(t, filepath.Join(p.fakeState, "herdr-open-fail"), "fail\n")
-	first := p.run("", "add", "origin/explicit-remote")
+	first := p.run("", "add", "origin/explicit-remote", "rev")
 	mustFail(t, first)
 	mustContain(t, first.output, "creating herdr session failed")
 
@@ -326,11 +382,11 @@ func TestE2EAddResumesAfterSessionCreationFails(t *testing.T) {
 	if err := os.Remove(filepath.Join(p.fakeState, "herdr-open-fail")); err != nil {
 		t.Fatal(err)
 	}
-	second := p.run("", "add", "origin/explicit-remote")
+	second := p.run("", "add", "origin/explicit-remote", "rev")
 	mustSucceed(t, second)
 	mustContain(t, second.output, "resuming existing worktree")
 	mustEqual(t, mustReadFile(t, filepath.Join(dir, "setup.marker")), "setup")
-	mustContain(t, mustReadFile(t, filepath.Join(p.fakeState, "herdr-workspaces")), "explicit-remote")
+	mustContain(t, mustReadFile(t, filepath.Join(p.fakeState, "herdr-workspaces")), "[rev] explicit-remote [project]")
 }
 
 func TestE2EAddDoesNotRerunSetupForLegacyWorktree(t *testing.T) {
@@ -491,6 +547,19 @@ if [ "$1" = worktree ] && [ "$2" = open ]; then
   done
   id="w$(wc -l < "$state" | tr -d ' ')"
   printf '%s\t%s\t%s\n' "$id" "$path" "$label" >> "$state"
+  printf '{}'\n
+  exit 0
+fi
+if [ "$1" = workspace ] && [ "$2" = rename ]; then
+  if [ -f "$WK_FAKE_STATE/herdr-rename-fail" ]; then
+    echo "herdr rename failed" >&2
+    exit 1
+  fi
+  while IFS='	' read -r id path label; do
+    [ "$id" != "$3" ] || label=$4
+    printf '%s\t%s\t%s\n' "$id" "$path" "$label"
+  done < "$state" > "$state.next"
+  mv "$state.next" "$state"
   printf '{}'\n
   exit 0
 fi

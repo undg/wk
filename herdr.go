@@ -53,6 +53,19 @@ func (herdrBackend) Create(s session) error {
 	return err
 }
 
+// Rename changes only the label; path remains the workspace identity.
+func (herdrBackend) Rename(s session) error {
+	ws, err := herdrWorkspaceFor(s.Dir)
+	if err != nil {
+		return err
+	}
+	if ws.Label == s.Name {
+		return nil
+	}
+	_, err = runHerdr("workspace", "rename", ws.WorkspaceID, s.Name)
+	return err
+}
+
 func (herdrBackend) Kill(s session) error {
 	ws, err := herdrWorkspaceFor(s.Dir)
 	if err != nil {

@@ -46,7 +46,7 @@ func resolveVersion() string {
 func usage(w *os.File) {
 	fmt.Fprintf(w, "wk\n\n")
 	fmt.Fprintf(w, "USAGE\n")
-	fmt.Fprintf(w, "  wk add <branch-name|origin/branch-name>\n")
+	fmt.Fprintf(w, "  wk add <branch-name|origin/branch-name> [badge]\n")
 	fmt.Fprintf(w, "  wk delete <worktree-dir>\n")
 	fmt.Fprintf(w, "  wk rm <worktree-dir>\n")
 	fmt.Fprintf(w, "  wk clean\n")
@@ -59,6 +59,7 @@ func usage(w *os.File) {
 	fmt.Fprintf(w, "  add branch-name          creates <sanitized-branch>; checks out origin/branch-name\n")
 	fmt.Fprintf(w, "                           when it exists, else branches from base_ref\n")
 	fmt.Fprintf(w, "  add origin/branch-name   creates local branch-name from origin/branch-name\n")
+	fmt.Fprintf(w, "  add <branch> <badge>     prefix the Herdr label with [badge]; updates existing workspaces\n")
 	fmt.Fprintf(w, "  delete/rm <dir|branch|.> removes worktree + its session, deletes its branch, prunes\n")
 	fmt.Fprintf(w, "                           accepts the worktree dir, its branch name, or \".\" for cwd\n")
 	fmt.Fprintf(w, "  clean                    delete worktrees whose branch PR has merged\n")
@@ -135,12 +136,16 @@ func main() {
 		fmt.Println("wk", resolveVersion())
 		return
 	case "add":
-		if len(args) != 2 {
-			logError("expected exactly one branch argument")
+		if len(args) < 2 || len(args) > 3 {
+			logError("expected a branch argument and optional badge")
 			usage(os.Stderr)
 			os.Exit(1)
 		}
-		err = runCreate(args[1], backendOverride)
+		badge := ""
+		if len(args) == 3 {
+			badge = args[2]
+		}
+		err = runCreate(args[1], badge, backendOverride)
 	case "delete", "rm":
 		if len(args) != 2 {
 			logError("expected exactly one worktree-dir argument")
