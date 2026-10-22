@@ -83,6 +83,9 @@ func runDelete(rawDir, backendOverride string) error {
 		Dir:  worktreeDir,
 	}
 
+	finishProgress := startHerdrProgress(cfg.HerdrProgress)
+	defer finishProgress()
+
 	if len(cfg.Teardown) > 0 {
 		logStep("running teardown steps")
 		if err := runShellSteps(worktreeDir, cfg.Teardown); err != nil {
@@ -139,6 +142,7 @@ func runDelete(rawDir, backendOverride string) error {
 	// attached to — which some backends do without waiting, potentially
 	// tearing down the pty mid-command — can't leave a half-deleted worktree
 	// behind: by the time it runs, there's nothing left to lose.
+	finishProgress()
 	if backend.Has(sess) {
 		logStep("killing %s session: %s", backend.Kind(), sess.Name)
 		if err := backend.Kill(sess); err != nil {

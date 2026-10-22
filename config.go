@@ -19,6 +19,7 @@ type GlobalConfig struct {
 	DefaultBaseRef  string `toml:"default_base_ref"`
 	SessionTemplate string `toml:"session_template"`
 	SessionBackend  string `toml:"session_backend"`
+	HerdrProgress   bool   `toml:"herdr_progress"`
 }
 
 func defaultGlobalConfig() GlobalConfig {
@@ -26,6 +27,7 @@ func defaultGlobalConfig() GlobalConfig {
 		DefaultBaseRef:  "origin/main",
 		SessionTemplate: defaultSessionTemplate,
 		SessionBackend:  backendHerdr,
+		HerdrProgress:   true,
 	}
 }
 
@@ -54,10 +56,11 @@ func loadGlobalConfig() (GlobalConfig, error) {
 
 // RepoConfig is .wk.toml — one per project, living at the project root.
 type RepoConfig struct {
-	Name     string   `toml:"name"`
-	BaseRef  string   `toml:"base_ref"`
-	Setup    []string `toml:"setup"`
-	Teardown []string `toml:"teardown"`
+	HerdrProgress *bool    `toml:"herdr_progress"`
+	Name          string   `toml:"name"`
+	BaseRef       string   `toml:"base_ref"`
+	Setup         []string `toml:"setup"`
+	Teardown      []string `toml:"teardown"`
 }
 
 const repoConfigFileName = ".wk.toml"
@@ -104,6 +107,7 @@ type ProjectConfig struct {
 	BaseRef         string
 	SessionTemplate string
 	SessionBackend  string
+	HerdrProgress   bool
 	Setup           []string
 	Teardown        []string
 }
@@ -156,11 +160,17 @@ func loadProjectConfig() (ProjectConfig, error) {
 		sessionTemplate = defaultSessionTemplate
 	}
 
+	herdrProgress := global.HerdrProgress
+	if repo.HerdrProgress != nil {
+		herdrProgress = *repo.HerdrProgress
+	}
+
 	return ProjectConfig{
 		ProjectName:     projectName,
 		BaseRef:         baseRef,
 		SessionTemplate: sessionTemplate,
 		SessionBackend:  global.SessionBackend,
+		HerdrProgress:   herdrProgress,
 		Setup:           repo.Setup,
 		Teardown:        repo.Teardown,
 	}, nil

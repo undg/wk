@@ -35,6 +35,9 @@ func runCreate(rawBranchArg, badge, backendOverride string) error {
 		attachOrSwitch = herdrAttachIfFocusUnchanged()
 	}
 
+	finishProgress := startHerdrProgress(cfg.HerdrProgress)
+	defer finishProgress()
+
 	rawBranch := rawBranchArg
 	baseRef := cfg.BaseRef
 	trackRemote := false
@@ -143,6 +146,7 @@ func runCreate(rawBranchArg, badge, backendOverride string) error {
 			}
 		}
 		logInfo("%s session already exists: %s", backend.Kind(), sess.Name)
+		finishProgress()
 		return attachOrSwitch(sess)
 	}
 
@@ -154,6 +158,7 @@ func runCreate(rawBranchArg, badge, backendOverride string) error {
 		return fmt.Errorf("creating %s session failed: %w", backend.Kind(), err)
 	}
 
+	finishProgress()
 	return attachOrSwitch(sess)
 }
 

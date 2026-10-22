@@ -82,6 +82,7 @@ teardown = [                     # run in order, inside the worktree, before it'
 |---|---|---|
 | `name` | no | Overrides the project-root folder name as the `{project}` used in session names. |
 | `base_ref` | no | Overrides the global `default_base_ref` for this repo's new branches. |
+| `herdr_progress` | no | Overrides the global progress setting for this repo (`true` or `false`). |
 | `setup` | no | Shell steps run inside a freshly created worktree, in order, stopping at the first failure. |
 | `teardown` | no | Shell steps run inside a worktree right before it's deleted — for anything `git worktree remove` won't clean up on its own (stopping a docker stack, killing background processes, etc.). |
 
@@ -93,6 +94,7 @@ teardown = [                     # run in order, inside the worktree, before it'
 default_base_ref = "origin/main"
 session_template = "{branch} [{project}]"
 session_backend = "herdr"
+herdr_progress = true
 ```
 
 | Field | Meaning |
@@ -100,6 +102,9 @@ session_backend = "herdr"
 | `default_base_ref` | Base ref for new branches when a repo's `.wk.toml` doesn't set its own `base_ref`. |
 | `session_template` | How sessions are named — a herdr workspace label or a tmux session name. `{project}` resolves to `.wk.toml`'s `name`, or the project-root folder name if unset. |
 | `session_backend` | `herdr` (default) or `tmux`. Overridable per run with `--herdr` / `--tmux` / `--backend <kind>`. |
+| `herdr_progress` | `true` by default. Report `wk` as working in the invoking Herdr pane during add/delete, including setup/teardown. Set `false` to opt out globally; a repo's `.wk.toml` can override either value. |
+
+Progress uses Herdr's inherited pane, binary, and socket environment variables; outside Herdr it does nothing. The busy indicator appears on the invoking workspace, not the destination worktree. It skips panes that already have an agent, and reporting failures do not fail the command. The temporary agent is released on completion or errors, before attaching or closing a workspace.
 
 ## 4. Session backends
 

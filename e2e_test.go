@@ -116,6 +116,10 @@ func newE2EProject(t *testing.T, repoConfig string) *e2eProject {
 		"GIT_TERMINAL_PROMPT": "0",
 		"PATH":                fakeBin + string(os.PathListSeparator) + os.Getenv("PATH"),
 		"WK_FAKE_STATE":       p.fakeState,
+		"HERDR_ENV":           "",
+		"HERDR_PANE_ID":       "",
+		"HERDR_BIN_PATH":      "",
+		"HERDR_SOCKET_PATH":   "",
 	})
 	return p
 }
@@ -555,6 +559,23 @@ if [ "$1" = api ] && [ "$2" = snapshot ]; then
     workspace=${pane%:p*}
     printf '{"result":{"snapshot":{"focused_workspace_id":"%s","focused_tab_id":"%s:t1","focused_pane_id":"%s"}}}\n' "$workspace" "$workspace" "$pane"
   fi
+  exit 0
+fi
+if [ "$1" = pane ]; then
+  case "$2" in
+    get)
+      if [ -f "$WK_FAKE_STATE/herdr-progress-invalid" ]; then printf '{}\n'; exit 0; fi
+      printf '{"result":{"pane":{"pane_id":"%s","agent":"%s"}}}\n' "$3" "${WK_FAKE_AGENT-}"
+      ;;
+    report-agent|release-agent)
+      if [ -f "$WK_FAKE_STATE/herdr-progress-fail" ]; then
+        echo 'progress unavailable' >&2
+        exit 1
+      fi
+      printf '{}\n'
+      ;;
+    *) exit 2 ;;
+  esac
   exit 0
 fi
 if [ "$1" = workspace ] && [ "$2" = list ]; then

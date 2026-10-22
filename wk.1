@@ -47,6 +47,18 @@ it leaves focus unchanged and reports that the workspace is ready.  Missing
 caller identity or an unavailable or incomplete focus snapshot also prevents
 automatic switching.  Attaching from outside Herdr and tmux behavior are
 unchanged.
+.PP
+Inside Herdr, add and delete report a temporary working agent named wk in the
+invoking pane by default, including during setup and teardown.  The busy
+indicator belongs to the invoking workspace, not the destination worktree.
+Panes that already have an agent are left alone.  Progress reporting is
+best-effort and does not fail the command.  The temporary agent is released on
+completion or errors, before attaching or closing a workspace.
+Set
+.B herdr_progress = false
+in the global configuration to opt out.  The same field in
+.I .wk.toml
+can override the global value with either true or false.
 .TP
 .BI delete " worktree-dir"
 Remove a worktree and its session, delete its branch, and prune stale
@@ -98,6 +110,7 @@ before or after the command; if more than one is supplied, the last one wins.
 Per-project configuration.  Its optional fields are
 .BR name ,
 .BR base_ref ,
+.BR herdr_progress ,
 .BR setup ,
 and
 .BR teardown .
@@ -106,8 +119,10 @@ and
 Global configuration.  The supported fields are
 .BR default_base_ref ,
 .BR session_template ,
+.BR session_backend ,
 and
-.BR session_backend .
+.BR herdr_progress
+(default true).
 .SH DEPENDENCIES
 .B wk
 requires Git.  It requires Herdr for the default backend or tmux when that
