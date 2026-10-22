@@ -308,6 +308,25 @@ session_backend = "tmux"
 	mustEqual(t, gitOutput(t, defaults, defaults.root, "rev-parse", "feat/default"), gitOutput(t, defaults, defaults.root, "rev-parse", "origin/main"))
 }
 
+func TestE2EHerdrAddPinsSourceToProjectRoot(t *testing.T) {
+	p := newE2EProject(t, `setup = ["printf setup > setup.marker"]
+`)
+	p.env = setEnv(p.env, map[string]string{
+		"HERDR_ENV":          "1",
+		"HERDR_WORKSPACE_ID": "another-workspace",
+	})
+	nested := filepath.Join(p.root, "main", "nested")
+	mustMkdirAll(t, nested)
+	mustSucceed(t, p.runAt(nested, "", "add", "test-worktree"))
+
+	root := mustRealPath(t, p.root)
+	log := mustReadFile(t, filepath.Join(p.fakeState, "herdr.log"))
+	mustContain(t, log, "|worktree open --cwd "+root+" --path "+filepath.Join(root, "test-worktree")+" --label test-worktree [project] --no-focus\n")
+	mustNotContain(t, log, "another-workspace")
+	mustContain(t, log, "|workspace focus w0\n")
+	mustEqual(t, mustReadFile(t, filepath.Join(p.root, "test-worktree", "setup.marker")), "setup")
+}
+
 func TestE2EHerdrBadgeCreatesUpdatesAndPreservesLabel(t *testing.T) {
 	p := newE2EProject(t, `name = "cave"
 setup = ["printf setup >> setup.marker"]

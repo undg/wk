@@ -1,4 +1,4 @@
-.TH WK 1 "2026-10-21" "wk" "User Commands"
+.TH WK 1 "2026-10-22" "wk" "User Commands"
 .SH NAME
 wk \- manage Git worktrees and their development sessions
 .SH SYNOPSIS
@@ -37,6 +37,11 @@ Supplying a badge also updates an existing workspace's label.  Omitting it
 leaves an existing label unchanged.  Branch names and worktree paths do not
 change.  Badges are stored only in Herdr's label; supply the badge again when
 recreating a closed workspace.  Badges require the Herdr backend.
+.PP
+Setup runs in the launching pane; keep that pane open, but you may switch to
+another pane, tab, or workspace while it runs.  Herdr workspace creation uses
+the explicit project root as its source, rather than the focused pane.
+On success, add focuses the destination workspace.
 .TP
 .BI delete " worktree-dir"
 Remove a worktree and its session, delete its branch, and prune stale

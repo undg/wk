@@ -49,7 +49,13 @@ func (herdrBackend) Create(s session) error {
 	if err != nil {
 		return fmt.Errorf("resolving worktree path %s: %w", s.Dir, err)
 	}
-	_, err = runHerdr("worktree", "open", "--path", dir, "--label", s.Name, "--no-focus")
+	// loadProjectConfig pins our cwd to the project root. Pass it explicitly:
+	// herdr's implicit source selection can follow the focused pane instead.
+	root, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("resolving project root: %w", err)
+	}
+	_, err = runHerdr("worktree", "open", "--cwd", root, "--path", dir, "--label", s.Name, "--no-focus")
 	return err
 }
 
@@ -184,9 +190,9 @@ func parseHerdrWorkspaces(out []byte) ([]herdrWorkspace, error) {
 // inside a herdr pane, herdr prefers that env var over cwd to pick the
 // "source" workspace for worktree open/create, and rejects the call if that
 // ambient workspace is itself a linked worktree ("linked_worktree_source").
-// wk always operates on an explicit --path/--label anyway, so it never wants
-// ambient-workspace inference; dropping the var lets herdr fall back to cwd,
-// which loadProjectConfig has already set to the project root.
+// wk never wants ambient-workspace inference. Dropping the var alone does
+// not prevent herdr from inferring a source from the UI; worktree open also
+// passes --cwd explicitly to pin its source to the project root.
 func runHerdr(args ...string) ([]byte, error) {
 	cmd := exec.Command("herdr", args...)
 	cmd.Stderr = os.Stderr
