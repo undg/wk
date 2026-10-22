@@ -41,7 +41,12 @@ recreating a closed workspace.  Badges require the Herdr backend.
 Setup runs in the launching pane; keep that pane open, but you may switch to
 another pane, tab, or workspace while it runs.  Herdr workspace creation uses
 the explicit project root as its source, rather than the focused pane.
-On success, add focuses the destination workspace.
+Inside Herdr, add focuses the destination only if the launching workspace,
+tab, and pane are still focused when it finishes.  If you switch elsewhere,
+it leaves focus unchanged and reports that the workspace is ready.  Missing
+caller identity or an unavailable or incomplete focus snapshot also prevents
+automatic switching.  Attaching from outside Herdr and tmux behavior are
+unchanged.
 .TP
 .BI delete " worktree-dir"
 Remove a worktree and its session, delete its branch, and prune stale

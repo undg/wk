@@ -30,6 +30,11 @@ func runCreate(rawBranchArg, badge, backendOverride string) error {
 		return fmt.Errorf("workspace badges require the herdr backend")
 	}
 
+	attachOrSwitch := backend.AttachOrSwitch
+	if backend.Kind() == backendHerdr && insideHerdr() {
+		attachOrSwitch = herdrAttachIfFocusUnchanged()
+	}
+
 	rawBranch := rawBranchArg
 	baseRef := cfg.BaseRef
 	trackRemote := false
@@ -137,8 +142,8 @@ func runCreate(rawBranchArg, badge, backendOverride string) error {
 				return fmt.Errorf("renaming herdr workspace failed: %w", err)
 			}
 		}
-		logInfo("%s session already exists, attaching: %s", backend.Kind(), sess.Name)
-		return backend.AttachOrSwitch(sess)
+		logInfo("%s session already exists: %s", backend.Kind(), sess.Name)
+		return attachOrSwitch(sess)
 	}
 
 	logStep("starting %s session: %s", backend.Kind(), sess.Name)
@@ -149,7 +154,7 @@ func runCreate(rawBranchArg, badge, backendOverride string) error {
 		return fmt.Errorf("creating %s session failed: %w", backend.Kind(), err)
 	}
 
-	return backend.AttachOrSwitch(sess)
+	return attachOrSwitch(sess)
 }
 
 type setupCheckpoint string

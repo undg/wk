@@ -314,6 +314,7 @@ func TestE2EHerdrAddPinsSourceToProjectRoot(t *testing.T) {
 	p.env = setEnv(p.env, map[string]string{
 		"HERDR_ENV":          "1",
 		"HERDR_WORKSPACE_ID": "another-workspace",
+		"HERDR_PANE_ID":      "w-launch:p1",
 	})
 	nested := filepath.Join(p.root, "main", "nested")
 	mustMkdirAll(t, nested)
@@ -542,6 +543,20 @@ log="$WK_FAKE_STATE/herdr.log"
 touch "$state"
 printf '%s|%s\n' "${HERDR_WORKSPACE_ID-}" "$*" >> "$log"
 if [ "$#" -eq 0 ]; then exit 0; fi
+if [ "$1" = api ] && [ "$2" = snapshot ]; then
+  if [ -f "$WK_FAKE_STATE/herdr-focus.json" ]; then
+    if grep -qx unavailable "$WK_FAKE_STATE/herdr-focus.json"; then
+      echo 'focus unavailable' >&2
+      exit 1
+    fi
+    cat "$WK_FAKE_STATE/herdr-focus.json"
+  else
+    pane=${HERDR_PANE_ID:-w-launch:p1}
+    workspace=${pane%:p*}
+    printf '{"result":{"snapshot":{"focused_workspace_id":"%s","focused_tab_id":"%s:t1","focused_pane_id":"%s"}}}\n' "$workspace" "$workspace" "$pane"
+  fi
+  exit 0
+fi
 if [ "$1" = workspace ] && [ "$2" = list ]; then
   printf '{"result":{"workspaces":['
   first=1
