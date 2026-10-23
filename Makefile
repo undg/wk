@@ -40,6 +40,35 @@ test:
 e2e:
 	go test -run '^TestE2E' -count=1
 
+# Keep path lists as environment data, never interpolated into shell commands.
+export FILES BASE LIST DRY_RUN
+
+## tools: install pinned metric tools locally (requires Go 1.26.2+)
+.PHONY: tools
+tools:
+	GOBIN="$(CURDIR)/bin/metrics/$$(go env GOOS)-$$(go env GOARCH)" go install github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0
+	GOBIN="$(CURDIR)/bin/metrics/$$(go env GOOS)-$$(go env GOARCH)" go install github.com/padiazg/go-crap@v0.5.1
+
+## test-mutants: mutation testing with FILES or BASE; LIST=1 previews; DRY_RUN=1 discovers only
+.PHONY: test-mutants
+test-mutants:
+	go run ./tools/metrics mutation
+
+## test-mutants-all: explicit full-project mutation testing (expensive); LIST=1 previews
+.PHONY: test-mutants-all
+test-mutants-all:
+	go run ./tools/metrics mutation -all
+
+## crap: fresh coverage and scoped CRAP with FILES or BASE; LIST=1 previews
+.PHONY: crap
+crap:
+	go run ./tools/metrics crap
+
+## crap-all: fresh coverage and CRAP for all implementation files; LIST=1 previews
+.PHONY: crap-all
+crap-all:
+	go run ./tools/metrics crap -all
+
 ## tidy: format code and tidy modfile
 .PHONY: tidy
 tidy:
