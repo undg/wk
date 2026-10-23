@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,61 +40,78 @@ func runLs(porcelain bool, backendOverride string) error {
 		return nil
 	}
 
-	type row struct {
-		branch, dir, session string
-	}
-	var rows []row
-	branchWidth, dirWidth := len("BRANCH"), len("WORKTREE")
-
-	for _, wt := range entries {
-		sessionName := ""
-		if wt.Branch != "" {
-			candidate := session{
-				Name: sessionNameFromTemplate(cfg.SessionTemplate, wt.Branch, cfg.ProjectName),
-				Dir:  wt.Dir,
-			}
-			if backend.Kind() == backendHerdr {
-				if ws, err := herdrWorkspaceFor(wt.Dir); err == nil {
-					sessionName = ws.Label
-				}
-			} else if backend.Has(candidate) {
-				sessionName = candidate.Name
-			}
-		}
-
-		if porcelain {
-			fmt.Printf("%s\n%s\n%s\n\n", wt.Branch, wt.Dir, sessionName)
-			continue
-		}
-
-		branch := wt.Branch
-		if branch == "" {
-			branch = "(detached)"
-		}
-
-		// Show paths relative to the project root, including the hidden
-		// container in normal clones, rather than Git's absolute paths.
-		dir := wt.Dir
-		if rel, err := filepath.Rel(root, wt.Dir); err == nil && !strings.HasPrefix(rel, "..") {
-			dir = rel
-		}
-
-		rows = append(rows, row{branch: branch, dir: dir, session: sessionName})
-		branchWidth = max(branchWidth, len(branch))
-		dirWidth = max(dirWidth, len(dir))
-	}
-
+	rows := discoverListRows(entries, cfg, backend)
 	if porcelain {
-		return nil
-	}
-
-	fmt.Printf("%s%-*s  %-*s  %s%s\n", colorBlue, branchWidth, "BRANCH", dirWidth, "WORKTREE", "SESSION", colorReset)
-	for _, r := range rows {
-		session := colorRed + "no " + backend.Kind() + " session" + colorReset
-		if r.session != "" {
-			session = colorGreen + backend.Kind() + ": " + r.session + colorReset
-		}
-		fmt.Printf("%-*s  %-*s  %s\n", branchWidth, r.branch, dirWidth, r.dir, session)
+		writeListPorcelain(os.Stdout, rows)
+	} else {
+		writeListTable(os.Stdout, rows, root, backend.Kind())
 	}
 	return nil
+}
+
+// listRow keeps Git's branch and absolute path unchanged until rendering.
+type listRow struct {
+	branch, dir, session string
+}
+
+func discoverListRows(entries []worktreeEntry, cfg ProjectConfig, backend sessionBackend) []listRow {
+	var rows []listRow
+	for _, wt := range entries {
+		rows = append(rows, listRow{branch: wt.Branch, dir: wt.Dir, session: listSessionName(wt, cfg, backend)})
+	}
+	return rows
+}
+
+func listSessionName(wt worktreeEntry, cfg ProjectConfig, backend sessionBackend) string {
+	if wt.Branch == "" {
+		return ""
+	}
+	if backend.Kind() == backendHerdr {
+		if ws, err := herdrWorkspaceFor(wt.Dir); err == nil {
+			return ws.Label
+		}
+		return ""
+	}
+	candidate := session{
+		Name: sessionNameFromTemplate(cfg.SessionTemplate, wt.Branch, cfg.ProjectName),
+		Dir:  wt.Dir,
+	}
+	if backend.Has(candidate) {
+		return candidate.Name
+	}
+	return ""
+}
+
+func writeListPorcelain(w io.Writer, rows []listRow) {
+	for _, r := range rows {
+		fmt.Fprintf(w, "%s\n%s\n%s\n\n", r.branch, r.dir, r.session)
+	}
+}
+
+func writeListTable(w io.Writer, rows []listRow, root, backendKind string) {
+	// Copy display rows so rendering never changes Git's original values.
+	displayRows := make([]listRow, 0, len(rows))
+	branchWidth, dirWidth := len("BRANCH"), len("WORKTREE")
+	for _, r := range rows {
+		if r.branch == "" {
+			r.branch = "(detached)"
+		}
+		// Show paths relative to the project root, including the hidden
+		// container in normal clones, rather than Git's absolute paths.
+		if rel, err := filepath.Rel(root, r.dir); err == nil && !strings.HasPrefix(rel, "..") {
+			r.dir = rel
+		}
+		displayRows = append(displayRows, r)
+		branchWidth = max(branchWidth, len(r.branch))
+		dirWidth = max(dirWidth, len(r.dir))
+	}
+
+	fmt.Fprintf(w, "%s%-*s  %-*s  %s%s\n", colorBlue, branchWidth, "BRANCH", dirWidth, "WORKTREE", "SESSION", colorReset)
+	for _, r := range displayRows {
+		session := colorRed + "no " + backendKind + " session" + colorReset
+		if r.session != "" {
+			session = colorGreen + backendKind + ": " + r.session + colorReset
+		}
+		fmt.Fprintf(w, "%-*s  %-*s  %s\n", branchWidth, r.branch, dirWidth, r.dir, session)
+	}
 }
