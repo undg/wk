@@ -24,6 +24,12 @@ func resolveWorktreeTarget(raw, start string, cfg ProjectConfig) (string, error)
 	case filepath.IsAbs(raw):
 		paths = []string{raw}
 	}
+	return matchRegisteredWorktree(raw, paths, entries, cfg)
+}
+
+// matchRegisteredWorktree prefers checkout paths over branches, and branches
+// over rendered session names. Discovery order must not change that precedence.
+func matchRegisteredWorktree(raw string, paths []string, entries []worktreeEntry, cfg ProjectConfig) (string, error) {
 	for _, path := range paths {
 		canonical, err := filepath.EvalSymlinks(path)
 		if err != nil {
