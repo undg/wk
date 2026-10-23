@@ -25,6 +25,11 @@ install: build
 	$(INSTALL) -m 755 bin/$(BINARY_NAME) "$(DESTDIR)$(BINDIR)/$(BINARY_NAME)"
 	$(INSTALL) -m 644 $(MANPAGE) "$(DESTDIR)$(MAN1DIR)/$(MANPAGE)"
 
+## install-local: install wk and its man page into ~/.local
+.PHONY: install-local
+install-local:
+	$(MAKE) install PREFIX="$(HOME)/.local"
+
 ## uninstall: remove wk and its man page (use the same PREFIX and DESTDIR as install)
 .PHONY: uninstall
 uninstall:
