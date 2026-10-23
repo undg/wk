@@ -30,7 +30,11 @@ linked checkouts contain tracked copies.
 .SH COMMANDS
 .TP
 .BI add " branch-name [badge]"
-Create a worktree for a new branch based on the configured base ref.  If
+Create a worktree for a new branch from the caller's current HEAD in a
+traditional clone, or from the configured base ref in a bare repository.
+The caller's checkout is used even from a linked worktree or subdirectory;
+a detached HEAD is supported.  Uncommitted changes are not copied.
+An existing local branch is reused.  Otherwise, if
 .I origin/branch-name
 exists, check it out and track it instead.
 .TP
@@ -152,6 +156,8 @@ Per-project configuration.  Its optional fields are
 .BR setup ,
 and
 .BR teardown .
+The base_ref field selects the starting point for new branches only in bare
+repositories; traditional clones use the caller's current HEAD.
 .TP
 .I ~/.config/wk/config.toml
 Global configuration.  The supported fields are
@@ -161,6 +167,8 @@ Global configuration.  The supported fields are
 and
 .BR herdr_progress
 (default true).
+The default_base_ref field is the fallback for bare repositories without a
+project base_ref; it does not override a traditional clone's current HEAD.
 .SH DEPENDENCIES
 .B wk
 requires Git.  It requires Herdr for the default backend or tmux when that

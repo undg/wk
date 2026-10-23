@@ -6,6 +6,47 @@ import (
 	"testing"
 )
 
+func TestE2ENormalCloneAddStartsFromCallerCommit(t *testing.T) {
+	for _, checkout := range []string{"main", "linked", "detached"} {
+		t.Run(checkout, func(t *testing.T) {
+			p := newTestProject(t, "base_ref = \"origin/missing\"\n", false)
+			caller := p.root
+			switch checkout {
+			case "main":
+				testGit(t, caller, "switch", "-c", "current-feature")
+			case "linked", "detached":
+				caller = filepath.Join(p.root, ".worktrees", "source")
+				testGit(t, p.root, "worktree", "add", "-b", "current-feature", caller)
+			}
+			testGit(t, caller, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "--allow-empty", "-m", "caller-only commit")
+			if checkout == "detached" {
+				testGit(t, caller, "switch", "--detach")
+			}
+			want := gitOutput(t, p, caller, "rev-parse", "HEAD")
+			nested := filepath.Join(caller, "src")
+			mustMkdirAll(t, nested)
+			mustWriteFile(t, filepath.Join(caller, "uncommitted"), "not part of the new branch")
+
+			mustSucceed(t, p.runAt(nested, "", "add", "feat/child", "--tmux"))
+
+			dir := filepath.Join(p.root, ".worktrees", "feat-child")
+			mustEqual(t, gitOutput(t, p, dir, "rev-parse", "HEAD"), want)
+			mustEqual(t, gitOutput(t, p, dir, "branch", "--show-current"), "feat/child")
+			// Resuming must not require the unused configured base either.
+			mustSucceed(t, p.runAt(nested, "", "add", "feat/child", "--tmux"))
+			mustEqual(t, gitOutput(t, p, dir, "rev-parse", "HEAD"), want)
+			if _, err := os.Stat(filepath.Join(dir, "uncommitted")); !os.IsNotExist(err) {
+				t.Fatalf("new worktree inherited uncommitted file: %v", err)
+			}
+			// Remote checkouts still take precedence over the caller's commit.
+			mustSucceed(t, p.runAt(nested, "", "add", "remote-branch", "--tmux"))
+			remoteDir := filepath.Join(p.root, ".worktrees", "remote-branch")
+			mustEqual(t, gitOutput(t, p, remoteDir, "rev-parse", "HEAD"), gitOutput(t, p, p.root, "rev-parse", "origin/remote-branch"))
+			mustEqual(t, gitOutput(t, p, remoteDir, "rev-parse", "--abbrev-ref", "@{upstream}"), "origin/remote-branch")
+		})
+	}
+}
+
 func TestE2ENormalCloneListAndCleanFromLinkedSubdirectory(t *testing.T) {
 	p := newTestProject(t, "", false)
 	mustSucceed(t, p.run("", "add", "merged", "--tmux"))
@@ -84,10 +125,12 @@ func TestBareLayoutsStillCreateDirectChildren(t *testing.T) {
 			if err := os.Chdir(dir); err != nil {
 				t.Fatal(err)
 			}
+			testGit(t, dir, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "--allow-empty", "-m", "bare caller-only commit")
 			if err := runCreate("feat/second", "", backendTmux); err != nil {
 				t.Fatal(err)
 			}
 			mustDir(t, filepath.Join(p.root, "feat-second"))
+			mustEqual(t, gitOutput(t, p, filepath.Join(p.root, "feat-second"), "rev-parse", "HEAD"), gitOutput(t, p, p.root, "rev-parse", "origin/main"))
 			if err := runCreate("release", "", backendTmux); err != nil {
 				t.Fatal(err)
 			}

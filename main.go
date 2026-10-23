@@ -57,7 +57,7 @@ func usage(w *os.File) {
 	fmt.Fprintf(w, "  wk help|-h|--help\n\n")
 	fmt.Fprintf(w, "BEHAVIOR\n")
 	fmt.Fprintf(w, "  add branch-name          creates <sanitized-branch>; checks out origin/branch-name\n")
-	fmt.Fprintf(w, "                           when it exists, else branches from base_ref\n")
+	fmt.Fprintf(w, "                           when it exists, else branches from current HEAD (bare: base_ref)\n")
 	fmt.Fprintf(w, "  add origin/branch-name   creates local branch-name from origin/branch-name\n")
 	fmt.Fprintf(w, "  add <branch> <badge>     prefix the Herdr label with [badge]; updates existing workspaces\n")
 	fmt.Fprintf(w, "  delete/rm <dir|branch|.> removes worktree + its session, deletes its branch, prunes\n")

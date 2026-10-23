@@ -69,7 +69,7 @@ wk init
 wk add feat/login
 ```
 
-`wk add` creates `.worktrees/feat-login/` inside the main checkout, using the same branch sanitization as bare projects. Before creating the first linked worktree, it adds `/.worktrees/` to the main checkout's `.gitignore`, preserving existing content and avoiding duplicate entries. Commit that ignore rule if you want it shared with collaborators. An ignore-file read or write failure, or a conflicting rule that leaves the container unignored, stops creation.
+`wk add` creates `.worktrees/feat-login/` inside the main checkout, using the same branch sanitization as bare projects. New branches start at the caller's current `HEAD`, not the configured `base_ref`. This includes invocation from a linked worktree or a subdirectory, and detached checkouts. Only committed changes are included. Before creating the first linked worktree, it adds `/.worktrees/` to the main checkout's `.gitignore`, preserving existing content and avoiding duplicate entries. Commit that ignore rule if you want it shared with collaborators. An ignore-file read or write failure, or a conflicting rule that leaves the container unignored, stops creation.
 
 ```text
 project/
@@ -91,7 +91,7 @@ Lives at the project root: next to `.bare/` for a bare wrapper, at the bare root
 ```toml
 name = "pgm-be"                  # optional; session names use this instead of the folder name
 
-base_ref = "origin/main"         # optional; overrides the global default_base_ref
+base_ref = "origin/main"         # optional; bare repos only, overrides default_base_ref
 
 setup = [                        # run in order, inside the new worktree, after `git worktree add`
   "pnpm i --frozen-lockfile",
@@ -109,7 +109,7 @@ teardown = [                     # run in order, inside the worktree, before it'
 | Field | Required | Meaning |
 |---|---|---|
 | `name` | no | Overrides the project-root folder name as the `{project}` used in session names. |
-| `base_ref` | no | Overrides the global `default_base_ref` for this repo's new branches. |
+| `base_ref` | no | Overrides the global `default_base_ref` for new branches in a bare repo. Traditional clones use the caller's current `HEAD`. |
 | `herdr_progress` | no | Overrides the global progress setting for this repo (`true` or `false`). |
 | `setup` | no | Shell steps run inside a freshly created worktree, in order, stopping at the first failure. |
 | `teardown` | no | Shell steps run inside a worktree right before it's deleted — for anything `git worktree remove` won't clean up on its own (stopping a docker stack, killing background processes, etc.). |
@@ -129,7 +129,7 @@ herdr_progress = true
 
 | Field | Meaning |
 |---|---|
-| `default_base_ref` | Base ref for new branches when a repo's `.wk.toml` doesn't set its own `base_ref`. |
+| `default_base_ref` | Base ref for new branches in bare repos when `.wk.toml` doesn't set `base_ref`. Traditional clones use the caller's current `HEAD`. |
 | `session_template` | How sessions are named — a herdr workspace label or a tmux session name. `{project}` resolves to `.wk.toml`'s `name`, or the project-root folder name if unset. |
 | `session_backend` | `herdr` (default) or `tmux`. Overridable per run with `--herdr` / `--tmux` / `--backend <kind>`. |
 | `herdr_progress` | `true` by default. Report `wk` as working in the invoking Herdr pane during add/delete, including setup/teardown. Set `false` to opt out globally; a repo's `.wk.toml` can override either value. |
@@ -166,7 +166,7 @@ Two workspaces on a single worktree is refused rather than guessed at — closin
 ## 5. Day-to-day usage
 
 ```sh
-wk add feat/123/add-btn      # create a worktree + branch off base_ref, start a session
+wk add feat/123/add-btn      # new branch from current HEAD (bare repo: base_ref), start session
 wk add someone-branch        # existing origin/someone-branch? check it out and track it
 wk add origin/someone-branch # same, spelled explicitly
 wk add origin/someone-branch rev # Herdr label: [rev] someone-branch [project]
@@ -179,7 +179,7 @@ wk init                      # scaffold .wk.toml at the owning project root (cwd
 wk --tmux add feat/123       # same as above, but on tmux for this run only
 ```
 
-`wk add <name>` with no `origin/` prefix checks whether `origin/<name>` already exists: if it does, the worktree checks that branch out and tracks it (shell completion offers exactly these names); if it doesn't, `<name>` is a new branch off `base_ref`.
+`wk add <name>` with no `origin/` prefix reuses an existing local branch first. Otherwise, if `origin/<name>` exists, the worktree checks that branch out and tracks it (shell completion offers exactly these names). If neither exists, `<name>` is a new branch from the caller's current `HEAD` in a traditional clone, or from `base_ref` in a bare repository.
 
 `wk add <branch> [badge]` accepts an optional display-only badge for Herdr. The badge prefixes the configured session label; the existing project suffix stays intact. Supplying another badge replaces the label with `[badge] <rendered session_template>`, including for an already-open workspace. Omitting the badge leaves an existing label unchanged. Branch names, worktree paths, upstreams, and deletion by branch/path/`.` are unaffected. Badges live only in Herdr's label: to recreate a closed workspace with its badge, supply it again. Badges are not supported by the tmux backend.
 
@@ -189,7 +189,7 @@ If a prior `wk add` failed, run the same command again. `wk` verifies that the e
 
 `wk` finds the owning project through Git's common repository metadata, so commands work from the root, linked checkouts, or their subdirectories. `wk delete .` targets the caller's current worktree, even from a subdirectory. Deletion accepts a branch, sanitized directory name, project-relative path such as `.worktrees/feat-login`, or absolute registered-worktree path; rendered session-template names remain a compatibility fallback. An unregistered directory cannot be deleted. If the owning root has no `.wk.toml`, `wk` offers to scaffold it there (`[y/N]`, defaults to no). `wk init` also resolves the owning root when invoked from inside a checkout; outside Git it scaffolds in cwd.
 
-New branches created off `base_ref` (e.g. `origin/main`) are meant to track `base_ref` immediately, so `git pull --rebase` works before you've ever pushed — but `wk` doesn't yet set this explicitly (see [[spec]]'s plan-of-action step 6+); today it only happens if your global `branch.autoSetupMerge` git config already does it, same as the old pgm-fe POC relied on. Check `git status`/`git branch -vv` after your first `wk add` in a repo to confirm tracking landed on `base_ref` before assuming it. Once you're ready to push, run `gup` — it re-points tracking from `base_ref` to the branch's own remote counterpart.
+In bare repositories, new branches created off `base_ref` (e.g. `origin/main`) are meant to track `base_ref` immediately, so `git pull --rebase` works before you've ever pushed — but `wk` doesn't yet set this explicitly (see [[spec]]'s plan-of-action step 6+); today it only happens if your global `branch.autoSetupMerge` git config already does it, same as the old pgm-fe POC relied on. Check `git status`/`git branch -vv` after your first `wk add` in a repo to confirm tracking landed on `base_ref` before assuming it. Once you're ready to push, run `gup` — it re-points tracking from `base_ref` to the branch's own remote counterpart.
 
 ## 6. Shell completion
 

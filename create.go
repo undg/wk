@@ -8,6 +8,12 @@ import (
 )
 
 func runCreate(rawBranchArg, badge, backendOverride string) error {
+	// Config loading changes cwd to the project root. Preserve the caller's
+	// checkout so a linked worktree can be the starting point for new work.
+	callerDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("resolving working directory: %w", err)
+	}
 	cfg, err := loadProjectConfig()
 	if err != nil {
 		return err
@@ -30,22 +36,11 @@ func runCreate(rawBranchArg, badge, backendOverride string) error {
 	finishProgress := startHerdrProgress(cfg.HerdrProgress)
 	defer finishProgress()
 
-	rawBranch := rawBranchArg
-	baseRef := cfg.BaseRef
-	trackRemote := false
-
-	if strings.HasPrefix(rawBranch, "origin/") {
-		baseRef = rawBranch
-		rawBranch = strings.TrimPrefix(rawBranch, "origin/")
-		trackRemote = true
-	} else if !branchExists(rawBranch) && refExists("origin/"+rawBranch) {
-		// Shell completion offers remote branch names with the origin/
-		// prefix stripped, so a completed name is usually a branch that
-		// already exists on the remote — check it out instead of starting
-		// unrelated work off base_ref.
-		baseRef = "origin/" + rawBranch
-		trackRemote = true
+	branch, err := resolveCreateBranch(rawBranchArg, callerDir, cfg)
+	if err != nil {
+		return err
 	}
+	rawBranch, baseRef := branch.Name, branch.BaseRef
 
 	slug := SanitizeBranch(rawBranch)
 	if slug == "" {
@@ -110,7 +105,7 @@ func runCreate(rawBranchArg, badge, backendOverride string) error {
 	// but it does not set an upstream itself. Explicit remote checkouts must
 	// still track their requested origin branch. It is harmless to repeat when
 	// resuming after a later failure, and lets a retry repair this step too.
-	if trackRemote {
+	if branch.TrackRemote {
 		if err := setBranchUpstream(rawBranch, baseRef); err != nil {
 			return fmt.Errorf("setting branch upstream failed: %w", err)
 		}
@@ -160,6 +155,45 @@ func runCreate(rawBranchArg, badge, backendOverride string) error {
 
 	finishProgress()
 	return attachOrSwitch(sess)
+}
+
+type createBranch struct {
+	Name        string
+	BaseRef     string
+	TrackRemote bool
+}
+
+// resolveCreateBranch preserves existing branch checkout precedence, then
+// chooses the caller's commit for normal clones or the configured bare base.
+// Git ref lookups run at the project root after configuration has loaded.
+func resolveCreateBranch(rawBranch, callerDir string, cfg ProjectConfig) (createBranch, error) {
+	if strings.HasPrefix(rawBranch, "origin/") {
+		return createBranch{
+			Name: strings.TrimPrefix(rawBranch, "origin/"), BaseRef: rawBranch, TrackRemote: true,
+		}, nil
+	}
+
+	exists := branchExists(rawBranch)
+	if !exists && refExists("origin/"+rawBranch) {
+		// Completion offers remote branches without the origin/ prefix.
+		return createBranch{
+			Name: rawBranch, BaseRef: "origin/" + rawBranch, TrackRemote: true,
+		}, nil
+	}
+	if cfg.Repository.MainCheckout == "" {
+		return createBranch{Name: rawBranch, BaseRef: cfg.BaseRef}, nil
+	}
+	if exists {
+		return createBranch{Name: rawBranch, BaseRef: rawBranch}, nil
+	}
+
+	// Pin the caller's commit, not the main checkout's HEAD. Detached
+	// checkouts are valid starting points too.
+	baseRef, err := gitAt(callerDir, "rev-parse", "--verify", "HEAD^{commit}")
+	if err != nil {
+		return createBranch{}, fmt.Errorf("resolving current checkout commit: %w", err)
+	}
+	return createBranch{Name: rawBranch, BaseRef: baseRef}, nil
 }
 
 type setupCheckpoint string
