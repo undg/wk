@@ -7,7 +7,7 @@ created: 2026-08-26
 
 # wk
 
-`wk` automates a specific workflow: one bare git repo per project, one worktree per branch, one session per worktree — a [herdr](https://herdr.dev) workspace by default, or a tmux session. It is **not** a generic git-worktree tool — it encodes opinions about layout, config, and naming. This README documents those opinions.
+`wk` manages Git worktrees in bare repositories and traditional clones: one worktree per branch, one session per worktree — a [herdr](https://herdr.dev) workspace by default, or a tmux session. It detects the repository layout automatically and keeps opinions about layout, config, and naming. This README documents those opinions.
 
 > **Status**: the Go binary is implemented and replaces the old bash POC (`wk-pgm-fe.sh` + `wk-delete-merged.sh`). See [[spec]] for the full design and remaining plan-of-action items.
 
@@ -32,9 +32,11 @@ For package staging, set `DESTDIR` while retaining the final `PREFIX`, for examp
 
 The Makefile uses portable POSIX tooling available on macOS and Linux. No `./configure` script is needed. The only usual platform difference is the installation prefix chosen by the system or package manager.
 
-## 1. Setting up a new bare repo
+## 1. Repository layouts
 
-New projects use the `.bare/`-wrapper convention (the older bare-root-is-project-root layout, still used by `pgm-fe`, is kept only for backward compatibility — don't use it for new projects):
+### Bare repositories
+
+New bare projects use the `.bare/`-wrapper convention (the older bare-root-is-project-root layout, still used by `pgm-fe`, is kept only for backward compatibility — don't use it for new projects):
 
 ```sh
 mkdir -p ~/Code/<project> && cd ~/Code/<project>
@@ -56,9 +58,35 @@ At this point `~/Code/<project>/` contains `.bare/`, `.git` (the gitfile), `main
 
 Finish setup by adding `.wk.toml` (next section) and running `wk init` from this directory if you'd rather scaffold it than hand-write it.
 
+### Traditional clones
+
+No conversion to a bare repository is needed:
+
+```sh
+git clone <remote-url> project
+cd project
+wk init
+wk add feat/login
+```
+
+`wk add` creates `.worktrees/feat-login/` inside the main checkout, using the same branch sanitization as bare projects. Before creating the first linked worktree, it adds `/.worktrees/` to the main checkout's `.gitignore`, preserving existing content and avoiding duplicate entries. Commit that ignore rule if you want it shared with collaborators. An ignore-file read or write failure, or a conflicting rule that leaves the container unignored, stops creation.
+
+```text
+project/
+  .git/
+  .gitignore
+  .wk.toml
+  .worktrees/
+    feat-login/
+```
+
+Git metadata determines the layout, including when invoked from a linked worktree or a subdirectory. Bare projects still create `<project-root>/<sanitized-branch>/`; normal clones create `<main-checkout>/.worktrees/<sanitized-branch>/`. No layout flag or configuration setting is required. Existing registered worktrees are not moved.
+
+The main checkout remains visible in `wk ls`, but `wk delete` refuses to remove it and `wk clean` skips it, regardless of its branch name.
+
 ## 2. `.wk.toml`
 
-Lives at the project root (next to `.bare/`). Declares everything specific to this repo.
+Lives at the project root: next to `.bare/` for a bare wrapper, at the bare root for the legacy layout, or in the main checkout for a traditional clone. A linked checkout's tracked copy does not override the owning project's config. Declares everything specific to this repo.
 
 ```toml
 name = "pgm-be"                  # optional; session names use this instead of the folder name
@@ -85,6 +113,8 @@ teardown = [                     # run in order, inside the worktree, before it'
 | `herdr_progress` | no | Overrides the global progress setting for this repo (`true` or `false`). |
 | `setup` | no | Shell steps run inside a freshly created worktree, in order, stopping at the first failure. |
 | `teardown` | no | Shell steps run inside a worktree right before it's deleted — for anything `git worktree remove` won't clean up on its own (stopping a docker stack, killing background processes, etc.). |
+
+The example above uses bare-layout paths. Setup and teardown always run inside the target worktree. To reach a shared file at the project root, use `../<file>` in a bare project and `../../<file>` in a traditional clone. `wk` does not rewrite your shell commands.
 
 ## 3. Global config
 
@@ -145,7 +175,7 @@ wk delete <dir>              # tear down a worktree + its session (alias: wk rm 
 wk clean                     # sweep worktrees whose branch's PR is merged, offering to delete each
 wk ls                        # show worktrees + session status for the current project
 wk ls --porcelain            # same, but parse-friendly: 3-line blocks (branch, dir, session), no labels
-wk init                      # scaffold a starter .wk.toml in the current directory
+wk init                      # scaffold .wk.toml at the owning project root (cwd outside Git)
 wk --tmux add feat/123       # same as above, but on tmux for this run only
 ```
 
@@ -157,7 +187,7 @@ wk --tmux add feat/123       # same as above, but on tmux for this run only
 
 If a prior `wk add` failed, run the same command again. `wk` verifies that the existing directory is the expected Git worktree and resumes incomplete work. New worktrees are checkpointed in Git's per-worktree metadata before `setup` starts: a failed setup is retried, while a later Herdr/tmux failure retries only the session step. Worktrees created before this behavior have no checkpoint, so `wk` safely skips their potentially non-idempotent setup and resumes the session instead. An existing directory that is not the expected registered worktree, or belongs to another branch, remains an error.
 
-`wk` finds the project root by walking up from cwd looking for `.wk.toml`, so any command works from inside a worktree checkout too, not just from the project root (next to `.bare/`) — `wk delete .` deletes whatever worktree you're standing in. If no `.wk.toml` turns up anywhere above cwd, `wk` errors out and offers to run `wk init` right there (`[y/N]`, defaults to no).
+`wk` finds the owning project through Git's common repository metadata, so commands work from the root, linked checkouts, or their subdirectories. `wk delete .` targets the caller's current worktree, even from a subdirectory. Deletion accepts a branch, sanitized directory name, project-relative path such as `.worktrees/feat-login`, or absolute registered-worktree path; rendered session-template names remain a compatibility fallback. An unregistered directory cannot be deleted. If the owning root has no `.wk.toml`, `wk` offers to scaffold it there (`[y/N]`, defaults to no). `wk init` also resolves the owning root when invoked from inside a checkout; outside Git it scaffolds in cwd.
 
 New branches created off `base_ref` (e.g. `origin/main`) are meant to track `base_ref` immediately, so `git pull --rebase` works before you've ever pushed — but `wk` doesn't yet set this explicitly (see [[spec]]'s plan-of-action step 6+); today it only happens if your global `branch.autoSetupMerge` git config already does it, same as the old pgm-fe POC relied on. Check `git status`/`git branch -vv` after your first `wk add` in a repo to confirm tracking landed on `base_ref` before assuming it. Once you're ready to push, run `gup` — it re-points tracking from `base_ref` to the branch's own remote counterpart.
 
@@ -246,6 +276,8 @@ lsof .cache/metrics/lock/active.lock
 Let the existing run finish, or interrupt it in its original terminal before retrying. The OS releases the lock when the process exits, including after a crash. The persistent lock file and directory alone do not indicate an active run. **Do not delete the lock file while metrics may be running**: replacing it could allow two processes to lock different files and run concurrently. Empty directories left by the older directory-lock implementation need no cleanup.
 
 ## 7. Known sharp edges
+
+- **Git's refusal to remove a worktree is respected**: deletion stops on a `git worktree remove --force` error rather than recursively deleting the directory itself. Locked worktrees must be explicitly unlocked before retrying. Teardown still runs before Git attempts removal.
 
 - **Deleting your current session works, but session teardown is the last step**: `wk delete .`/`wk delete <dir>` on the worktree whose session you're currently inside runs teardown, removes the worktree, deletes the branch, and prunes *before* touching the session — killing the session you're inside can't leave a half-deleted worktree behind, since by then there's nothing left to lose.
 - **A failed session kill on delete leaves an orphan `wk` can't find again**: the flip side of the ordering above. If the kill fails (herdr not running, two workspaces on one path, socket error), the worktree and branch are already gone, so rerunning `wk delete` reports `worktree directory not found` and `wk clean` never sees it — both look sessions up via git worktrees. Close it by hand: `herdr workspace close <id>` or `tmux kill-session -t <name>`. Not made resumable: that would need a session lookup independent of git, which isn't worth it for a rare failure with a one-command fix.

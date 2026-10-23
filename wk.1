@@ -1,4 +1,4 @@
-.TH WK 1 "2026-10-22" "wk" "User Commands"
+.TH WK 1 "2026-10-23" "wk" "User Commands"
 .SH NAME
 wk \- manage Git worktrees and their development sessions
 .SH SYNOPSIS
@@ -8,16 +8,25 @@ wk \- manage Git worktrees and their development sessions
 .RI [ arguments ]
 .SH DESCRIPTION
 .B wk
-manages a project arranged as one bare Git repository with one linked worktree
-per branch.  It starts and manages a Herdr workspace by default, or a tmux
-session when configured or requested.
+manages linked worktrees in bare Git repositories and traditional clones.
+It starts and manages a Herdr workspace by default, or a tmux session when
+configured or requested.
 .PP
-Run commands from the project root or from any worktree.  The project root
-contains a
-.I .wk.toml
-file and normally a
+Run commands from the project root, any linked worktree, or their
+subdirectories.  Git's common repository metadata identifies the owning
+project and its layout automatically; no layout flag is needed.
+Bare projects create worktrees directly under the project root, normally
+next to the
 .I .bare
-Git directory.
+Git directory.  Traditional clones create them under
+.I .worktrees/
+in the main checkout.  Both layouts use the same sanitized branch names.
+Existing registered worktrees are not relocated.
+.PP
+The owning project root contains
+.IR .wk.toml .
+In traditional clones the main checkout's config is authoritative, even when
+linked checkouts contain tracked copies.
 .SH COMMANDS
 .TP
 .BI add " branch-name [badge]"
@@ -66,15 +75,25 @@ worktree metadata.
 .I rm
 is an alias.  The argument may be a worktree directory, branch name, or
 .B .
-for the current worktree.
+for the current worktree, including when invoked from a subdirectory.
+Traditional clones also accept the sanitized directory name or a
+project-relative path such as
+.IR .worktrees/feat-login .
+Absolute registered-worktree paths and rendered session-template names
+(the latter as a compatibility fallback) are also accepted.
+Only registered checkouts may be removed.  The main checkout cannot be
+deleted, regardless of its branch name.  A Git removal error stops deletion;
+locked worktrees are not recursively deleted as a fallback.
 .TP
 .B clean
 Offer to remove worktrees whose pull request has merged.  This command uses
 .BR gh (1)
-to look up pull-request state.
+to look up pull-request state.  The main checkout of a traditional clone is
+never a cleanup candidate.
 .TP
 .B ls
-Show the project's worktrees and session status.
+Show the project's worktrees and session status, including the main checkout
+of a traditional clone.
 .TP
 .B ls --porcelain
 Print parse-friendly three-line blocks: branch, directory, and session.
@@ -82,7 +101,8 @@ Print parse-friendly three-line blocks: branch, directory, and session.
 .B init
 Create a starter
 .I .wk.toml
-in the current directory.
+at the owning project root, or in the current directory outside Git.
+Refuse to overwrite an existing config.
 .TP
 .BI completion " zsh|bash|fish"
 Print the shell completion script for the selected shell.
@@ -104,6 +124,24 @@ Use the tmux session backend for this invocation.
 .BI --backend " herdr|tmux"
 Equivalent to the matching short backend option.  Backend options may appear
 before or after the command; if more than one is supplied, the last one wins.
+.SH LAYOUT AND SETUP
+Before creating a linked worktree in a traditional clone,
+.B add
+ensures the anchored entry
+.B /.worktrees/
+exists in the main checkout's
+.IR .gitignore .
+Existing content is preserved and the entry is not duplicated.  Read or write
+errors, or conflicting rules that leave the container unignored, stop creation.
+This may leave a tracked ignore file modified; commit the rule to share it
+with collaborators.
+.PP
+Setup and teardown commands run inside the target worktree.  Relative paths
+to shared files at the project root therefore use
+.I ../
+for bare layouts and
+.I ../../
+for traditional clones.  Shell commands are not rewritten automatically.
 .SH FILES
 .TP
 .I .wk.toml
