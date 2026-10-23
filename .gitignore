@@ -1,3 +1,4 @@
 bin/
 /.reports/
 /.cache/metrics/
+/.worktrees/

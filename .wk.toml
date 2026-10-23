@@ -1,0 +1,7 @@
+name = "wk"                    # optional; overrides folder name for the session template's {project}
+
+setup = [
+  "make tools",
+]
+
+teardown = [ ]
