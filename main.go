@@ -3,45 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
-	"runtime/debug"
 	"strings"
 )
-
-// version is set via -ldflags "-X main.version=..." at build time, using
-// the git tag (see Makefile). When unset, resolveVersion falls back to Go's
-// automatic VCS build stamping.
-var version = "dev"
-
-// resolveVersion returns the ldflags-injected version, or falls back to the
-// commit hash Go automatically embeds from VCS info when built without
-// ldflags (e.g. `go run .` or a plain `go install`).
-func resolveVersion() string {
-	if version != "dev" {
-		return version
-	}
-	if info, ok := debug.ReadBuildInfo(); ok {
-		var revision string
-		var dirty bool
-		for _, s := range info.Settings {
-			switch s.Key {
-			case "vcs.revision":
-				revision = s.Value
-			case "vcs.modified":
-				dirty = s.Value == "true"
-			}
-		}
-		if revision != "" {
-			if len(revision) > 12 {
-				revision = revision[:12]
-			}
-			if dirty {
-				revision += "-dirty"
-			}
-			return revision
-		}
-	}
-	return "dev"
-}
 
 func usage(w *os.File) {
 	fmt.Fprintf(w, "wk\n\n")
