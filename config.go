@@ -137,9 +137,14 @@ func loadProjectConfig() (ProjectConfig, error) {
 		return ProjectConfig{}, err
 	}
 
+	return mergeProjectConfig(global, repo, repository), nil
+}
+
+// mergeProjectConfig applies repo overrides to global values without repository IO.
+func mergeProjectConfig(global GlobalConfig, repo RepoConfig, repository repositoryContext) ProjectConfig {
 	projectName := repo.Name
 	if projectName == "" {
-		projectName = filepath.Base(root)
+		projectName = filepath.Base(repository.Root)
 	}
 
 	baseRef := repo.BaseRef
@@ -166,7 +171,7 @@ func loadProjectConfig() (ProjectConfig, error) {
 		HerdrProgress:   herdrProgress,
 		Setup:           repo.Setup,
 		Teardown:        repo.Teardown,
-	}, nil
+	}
 }
 
 // offerInit implements the "no .wk.toml found" prompt from the project
