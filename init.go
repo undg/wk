@@ -12,7 +12,8 @@ base_ref = "origin/main"     # optional; overrides global default_base_ref
 setup = [
   # e.g.:
   # "pnpm i --frozen-lockfile",
-  # "ln -s ../AGENTS.md .",
+  # Shared files at the project root: ../ for bare repos, ../../ for normal clones.
+  # "ln -s ../../AGENTS.md .",
 ]
 
 teardown = [
@@ -21,14 +22,17 @@ teardown = [
 ]
 `
 
-// runInit scaffolds a starter .wk.toml in the current directory (assumed to
-// be the project root). Refuses to overwrite an existing one.
+// runInit scaffolds .wk.toml at the owning project root, or in cwd outside
+// Git. Refuses to overwrite an existing configuration.
 func runInit() error {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("resolving working directory: %w", err)
 	}
 
+	if repository, err := resolveRepository(cwd); err == nil {
+		cwd = repository.Root
+	}
 	path := filepath.Join(cwd, repoConfigFileName)
 	if _, err := os.Stat(path); err == nil {
 		return fmt.Errorf("%s already exists", path)

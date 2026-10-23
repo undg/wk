@@ -71,9 +71,8 @@ func runLs(porcelain bool, backendOverride string) error {
 			branch = "(detached)"
 		}
 
-		// Worktree dirs are siblings of the project root, so this is
-		// usually just the dir's basename — far more readable than the
-		// absolute path git hands back.
+		// Show paths relative to the project root, including the hidden
+		// container in normal clones, rather than Git's absolute paths.
 		dir := wt.Dir
 		if rel, err := filepath.Rel(root, wt.Dir); err == nil && !strings.HasPrefix(rel, "..") {
 			dir = rel

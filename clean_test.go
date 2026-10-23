@@ -1,6 +1,9 @@
 package main
 
 import (
+	"fmt"
+	"io"
+	"os"
 	"reflect"
 	"testing"
 )
@@ -27,6 +30,64 @@ func TestParseWorktreePorcelain(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("parseWorktreePorcelain() = %+v, want %+v", got, want)
 	}
+}
+
+func TestCleanWorktreesSkipsMainCheckoutEvenWhenMerged(t *testing.T) {
+	entries := []worktreeEntry{
+		{Dir: "/repo", Branch: "feature-not-main"},
+		{Dir: "/repo/.worktrees/main", Branch: "main"},
+		{Dir: "/repo/detached"},
+	}
+	states := fakePRLister{
+		"/repo":                 "MERGED",
+		"/repo/.worktrees/main": "MERGED",
+		"/repo/detached":        "MERGED",
+	}
+	var deleted []string
+	err := cleanWorktrees(entries, "/repo", states, func(string) bool { return true }, func(dir string) error {
+		deleted = append(deleted, dir)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(deleted, []string{"/repo/.worktrees/main"}) {
+		t.Fatalf("deleted %v, want only linked checkout on branch main", deleted)
+	}
+}
+
+func TestCleanReportsFailedDeletionAndContinues(t *testing.T) {
+	entries := []worktreeEntry{{Dir: "/repo/locked", Branch: "locked"}, {Dir: "/repo/next", Branch: "next"}}
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	defer writer.Close()
+	stderr := os.Stderr
+	os.Stderr = writer
+	var attempted []string
+	err = cleanWorktrees(entries, "", fakePRLister{"/repo/locked": "MERGED", "/repo/next": "MERGED"}, func(string) bool { return true }, func(dir string) error {
+		attempted = append(attempted, dir)
+		if dir == "/repo/locked" {
+			return fmt.Errorf("worktree is locked")
+		}
+		return nil
+	})
+	os.Stderr = stderr
+	writer.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(attempted, []string{"/repo/locked", "/repo/next"}) {
+		t.Fatalf("did not continue after failure: %v", attempted)
+	}
+	output, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustContain(t, string(output), "worktree is locked")
+	mustNotContain(t, string(output), "/repo/next")
 }
 
 type fakePRLister map[string]string
@@ -59,7 +120,7 @@ func TestCleanWorktrees(t *testing.T) {
 		return nil
 	}
 
-	if err := cleanWorktrees(entries, lister, confirm, deleteFn); err != nil {
+	if err := cleanWorktrees(entries, "", lister, confirm, deleteFn); err != nil {
 		t.Fatalf("cleanWorktrees() error = %v", err)
 	}
 

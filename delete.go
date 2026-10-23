@@ -4,29 +4,48 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
-// worktreeDirForRef finds the worktree directory matching ref, which may be
-// the checked-out branch name or the rendered session name/workspace label
-// (e.g. "feat/x [project]", copied from a herdr/tmux session listing).
-func worktreeDirForRef(ref string, cfg ProjectConfig) (string, bool) {
+// resolveWorktreeTarget accepts only registered checkouts. A path or branch
+// identifies the worktree; a rendered session name remains a legacy fallback.
+func resolveWorktreeTarget(raw, start string, cfg ProjectConfig) (string, error) {
 	entries, err := listWorktrees()
 	if err != nil {
-		return "", false
+		return "", err
 	}
-	for _, wt := range entries {
-		if wt.Branch == "" {
+	paths := []string{filepath.Join(cfg.Repository.Root, raw), filepath.Join(cfg.Repository.WorktreeRoot, raw)}
+	switch {
+	case raw == ".":
+		current, err := gitAt(start, "rev-parse", "--show-toplevel")
+		if err != nil {
+			return "", fmt.Errorf("finding current worktree: %w", err)
+		}
+		paths = []string{current}
+	case filepath.IsAbs(raw):
+		paths = []string{raw}
+	}
+	for _, path := range paths {
+		canonical, err := filepath.EvalSymlinks(path)
+		if err != nil {
 			continue
 		}
-		if wt.Branch == ref {
-			return wt.Dir, true
-		}
-		if sessionNameFromTemplate(cfg.SessionTemplate, wt.Branch, cfg.ProjectName) == ref {
-			return wt.Dir, true
+		for _, wt := range entries {
+			if canonical == wt.Dir {
+				return wt.Dir, nil
+			}
 		}
 	}
-	return "", false
+	for _, wt := range entries {
+		if wt.Branch != "" && wt.Branch == raw {
+			return wt.Dir, nil
+		}
+	}
+	for _, wt := range entries {
+		if wt.Branch != "" && sessionNameFromTemplate(cfg.SessionTemplate, wt.Branch, cfg.ProjectName) == raw {
+			return wt.Dir, nil
+		}
+	}
+	return "", fmt.Errorf("worktree directory not found or not a registered checkout: %s", raw)
 }
 
 func runDelete(rawDir, backendOverride string) error {
@@ -44,26 +63,12 @@ func runDelete(rawDir, backendOverride string) error {
 		return err
 	}
 
-	var worktreeDir string
-	switch {
-	case rawDir == ".":
-		worktreeDir = startDir
-	case strings.HasPrefix(rawDir, "/"):
-		worktreeDir = rawDir
-	default:
-		worktreeDir = "./" + rawDir
+	worktreeDir, err := resolveWorktreeTarget(rawDir, startDir, cfg)
+	if err != nil {
+		return err
 	}
-
-	if info, err := os.Stat(worktreeDir); err != nil || !info.IsDir() {
-		// rawDir didn't match a directory directly; maybe it's a branch
-		// name or a rendered session name/label (e.g. copied from `git
-		// branch` or a herdr/tmux session listing) rather than the
-		// sanitized worktree dir. Look it up by either instead.
-		if resolved, ok := worktreeDirForRef(rawDir, cfg); ok {
-			worktreeDir = resolved
-		} else {
-			return fmt.Errorf("worktree directory not found: %s", worktreeDir)
-		}
+	if worktreeDir == cfg.Repository.MainCheckout {
+		return fmt.Errorf("refusing to delete the main checkout: %s", worktreeDir)
 	}
 	logInfo("target worktree: %s", worktreeDir)
 
@@ -93,30 +98,11 @@ func runDelete(rawDir, backendOverride string) error {
 		}
 	}
 
-	// If the worktree being deleted is also the process's cwd (e.g. `wk
-	// delete .`), removing it pulls the rug out from under every git command
-	// below: cwd no longer exists once git unlinks it. Hop over to the
-	// repo's common git dir first — captured while cwd is still valid — so
-	// the rest of the flow keeps running from solid ground.
-	if cwd, err := os.Getwd(); err == nil {
-		if absTarget, err := filepath.Abs(worktreeDir); err == nil && cwd == absTarget {
-			commonDir, err := runGit("rev-parse", "--path-format=absolute", "--git-common-dir")
-			if err != nil {
-				return fmt.Errorf("resolving repo git dir: %w", err)
-			}
-			if err := os.Chdir(commonDir); err != nil {
-				return fmt.Errorf("leaving worktree before removal: %w", err)
-			}
-			worktreeDir = absTarget
-		}
-	}
-
+	// Configuration loading moved cwd to the owning root. That root is
+	// never a removable linked checkout, including for `delete .`.
 	logStep("removing worktree")
 	if err := worktreeRemove(worktreeDir); err != nil {
-		logStep("removing leftover untracked files")
-		if rmErr := os.RemoveAll(worktreeDir); rmErr != nil {
-			return fmt.Errorf("failed to remove worktree directory: %w", rmErr)
-		}
+		return fmt.Errorf("removing worktree: %w", err)
 	}
 
 	if _, err := os.Stat(worktreeDir); err == nil {

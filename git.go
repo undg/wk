@@ -21,11 +21,6 @@ func runGitInherit(args ...string) error {
 	return cmd.Run()
 }
 
-func isBareRepository() bool {
-	out, err := runGit("rev-parse", "--is-bare-repository")
-	return err == nil && out == "true"
-}
-
 func refExists(ref string) bool {
 	_, err := runGit("rev-parse", "--verify", "--quiet", ref+"^{commit}")
 	return err == nil

@@ -13,14 +13,6 @@ func runCreate(rawBranchArg, badge, backendOverride string) error {
 		return err
 	}
 
-	// loadProjectConfig may have chdir'd from a worktree checkout up to the
-	// project root, so this has to run after it: --is-bare-repository
-	// reports false from inside a linked worktree regardless of the repo's
-	// actual core.bare, but true from the root's .bare redirect.
-	if !isBareRepository() {
-		return fmt.Errorf("run this from a bare repository")
-	}
-
 	backend, err := newSessionBackend(cfg.SessionBackend, backendOverride)
 	if err != nil {
 		return err
@@ -59,7 +51,7 @@ func runCreate(rawBranchArg, badge, backendOverride string) error {
 	if slug == "" {
 		return fmt.Errorf("branch name became empty after sanitization")
 	}
-	worktreeDir := "./" + slug
+	worktreeDir := filepath.Join(cfg.Repository.WorktreeRoot, slug)
 	sess := session{
 		Name: sessionNameFromTemplate(cfg.SessionTemplate, rawBranch, cfg.ProjectName),
 		Dir:  worktreeDir,
@@ -90,6 +82,14 @@ func runCreate(rawBranchArg, badge, backendOverride string) error {
 	if reusingWorktree {
 		logInfo("resuming existing worktree: %s", worktreeDir)
 	} else {
+		if cfg.Repository.MainCheckout != "" {
+			if err := ensureWorktreesIgnored(cfg.Repository.Root); err != nil {
+				return err
+			}
+			if _, err := runGit("check-ignore", "--quiet", "--", worktreesDirectory+"/"); err != nil {
+				return fmt.Errorf("%s/ is not ignored; check conflicting .gitignore rules", worktreesDirectory)
+			}
+		}
 		logStep("creating worktree")
 		if branchExists(rawBranch) {
 			logInfo("branch already exists, reusing: %s", rawBranch)

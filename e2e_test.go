@@ -55,6 +55,11 @@ type e2eProject struct {
 
 func newE2EProject(t *testing.T, repoConfig string) *e2eProject {
 	t.Helper()
+	return newTestProject(t, repoConfig, true)
+}
+
+func newTestProject(t *testing.T, repoConfig string, bare bool) *e2eProject {
+	t.Helper()
 	root := t.TempDir()
 	p := &e2eProject{
 		t:         t,
@@ -98,16 +103,19 @@ func newE2EProject(t *testing.T, repoConfig string) *e2eProject {
 		testGit(t, seed, "checkout", "main")
 	}
 
-	testGit(t, root, "clone", "--bare", remote, filepath.Join(p.root, ".bare"))
-	mustWriteFile(t, filepath.Join(p.root, ".git"), "gitdir: ./.bare\n")
-	mustWriteFile(t, filepath.Join(p.root, ".wk.toml"), repoConfig)
-	testGit(t, p.root, "fetch", "origin", "+refs/heads/*:refs/remotes/origin/*")
-	// git clone --bare stores remote heads as local refs. Create the normal
-	// remote-tracking refs explicitly too; wk's default base_ref is origin/main.
-	for _, branch := range []string{"main", "release", "remote-branch", "explicit-remote"} {
-		testGit(t, p.root, "update-ref", "refs/remotes/origin/"+branch, "refs/heads/"+branch)
+	if bare {
+		testGit(t, root, "clone", "--bare", remote, filepath.Join(p.root, ".bare"))
+		mustWriteFile(t, filepath.Join(p.root, ".git"), "gitdir: ./.bare\n")
+		testGit(t, p.root, "fetch", "origin", "+refs/heads/*:refs/remotes/origin/*")
+		// Bare clones store remote heads as local refs too.
+		for _, branch := range []string{"main", "release", "remote-branch", "explicit-remote"} {
+			testGit(t, p.root, "update-ref", "refs/remotes/origin/"+branch, "refs/heads/"+branch)
+		}
+		testGit(t, p.root, "worktree", "add", "main", "main")
+	} else {
+		testGit(t, root, "clone", "--branch=main", remote, p.root)
 	}
-	testGit(t, p.root, "worktree", "add", "main", "main")
+	mustWriteFile(t, filepath.Join(p.root, ".wk.toml"), repoConfig)
 
 	p.env = setEnv(os.Environ(), map[string]string{
 		"HOME":                p.home,

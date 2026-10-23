@@ -78,20 +78,24 @@ func promptYesNo(prompt string) bool {
 }
 
 func runClean(backendOverride string) error {
+	cfg, err := loadProjectConfig()
+	if err != nil {
+		return err
+	}
 	entries, err := listWorktrees()
 	if err != nil {
 		return err
 	}
 	deleteFn := func(dir string) error { return runDelete(dir, backendOverride) }
-	return cleanWorktrees(entries, ghPRLister{}, promptYesNo, deleteFn)
+	return cleanWorktrees(entries, cfg.Repository.MainCheckout, ghPRLister{}, promptYesNo, deleteFn)
 }
 
 // cleanWorktrees is the testable core of `wk clean`: for each worktree with
 // a MERGED PR, prompt and delete via deleteFn — the same internal delete
 // path `wk delete` uses, no shelling back out to another script.
-func cleanWorktrees(entries []worktreeEntry, prLister PRLister, confirm func(prompt string) bool, deleteFn func(dir string) error) error {
+func cleanWorktrees(entries []worktreeEntry, mainCheckout string, prLister PRLister, confirm func(prompt string) bool, deleteFn func(dir string) error) error {
 	for _, wt := range entries {
-		if wt.Branch == "" {
+		if wt.Branch == "" || wt.Dir == mainCheckout {
 			continue
 		}
 
