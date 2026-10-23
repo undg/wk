@@ -112,26 +112,8 @@ func runCreate(rawBranchArg, badge, backendOverride string) error {
 	}
 
 	sessionExists := backend.Has(sess)
-	if len(cfg.Setup) > 0 && !sessionExists {
-		setupState, err := readSetupState(worktreeDir)
-		if err != nil {
-			return err
-		}
-		switch setupState {
-		case setupPending:
-			logStep("running setup steps")
-			if err := runShellSteps(worktreeDir, cfg.Setup); err != nil {
-				return err
-			}
-			if err := markSetupComplete(worktreeDir); err != nil {
-				return err
-			}
-		case setupUnknown:
-			// Worktrees created before resumable adds have no checkpoint. Their
-			// setup may already have completed, and arbitrary setup is often not
-			// idempotent (for example, ln -s), so the safe migration is to skip it.
-			logInfo("existing worktree has no setup checkpoint, not rerunning setup")
-		}
+	if err := runWorktreeSetup(worktreeDir, cfg.Setup, sessionExists); err != nil {
+		return err
 	}
 
 	if sessionExists {
@@ -194,6 +176,31 @@ func resolveCreateBranch(rawBranch, callerDir string, cfg ProjectConfig) (create
 		return createBranch{}, fmt.Errorf("resolving current checkout commit: %w", err)
 	}
 	return createBranch{Name: rawBranch, BaseRef: baseRef}, nil
+}
+
+// runWorktreeSetup retries pending setup before a session is created. Existing
+// sessions and empty setup lists leave the checkpoint untouched.
+func runWorktreeSetup(dir string, steps []string, sessionExists bool) error {
+	if len(steps) == 0 || sessionExists {
+		return nil
+	}
+	state, err := readSetupState(dir)
+	if err != nil {
+		return err
+	}
+	switch state {
+	case setupPending:
+		logStep("running setup steps")
+		if err := runShellSteps(dir, steps); err != nil {
+			return err
+		}
+		return markSetupComplete(dir)
+	case setupUnknown:
+		// Legacy setup may already have completed. Arbitrary setup is often
+		// not idempotent (for example, ln -s), so skip it rather than guessing.
+		logInfo("existing worktree has no setup checkpoint, not rerunning setup")
+	}
+	return nil
 }
 
 type setupCheckpoint string
