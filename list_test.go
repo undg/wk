@@ -11,13 +11,13 @@ import (
 
 func TestWriteListPorcelainPreservesGitValues(t *testing.T) {
 	rows := []listRow{
-		{branch: "feat/review", dir: "/project/.worktrees/feat-review", session: "[rev] custom label"},
+		{branch: "feat/review", dir: "/project/.wk/feat-review", session: "[rev] custom label"},
 		{branch: "main", dir: "/project"},
 		{dir: "/outside/detached"},
 	}
 	var out bytes.Buffer
 	writeListPorcelain(&out, rows)
-	mustEqual(t, out.String(), "feat/review\n/project/.worktrees/feat-review\n[rev] custom label\n\nmain\n/project\n\n\n\n/outside/detached\n\n\n")
+	mustEqual(t, out.String(), "feat/review\n/project/.wk/feat-review\n[rev] custom label\n\nmain\n/project\n\n\n\n/outside/detached\n\n\n")
 
 	out.Reset()
 	writeListPorcelain(&out, nil)
@@ -52,9 +52,9 @@ func TestWriteListTableExpandsWorktreeColumn(t *testing.T) {
 	var out bytes.Buffer
 	writeListTable(&out, []listRow{
 		{branch: "main", dir: "/project"},
-		{branch: "feat/x", dir: "/project/.worktrees/feat-x", session: "custom"},
+		{branch: "feat/x", dir: "/project/.wk/feat-x", session: "custom"},
 	}, "/project", backendTmux)
-	mustEqual(t, stripANSI(out.String()), "BRANCH  WORKTREE           SESSION\nmain    .                  no tmux session\nfeat/x  .worktrees/feat-x  tmux: custom\n")
+	mustEqual(t, stripANSI(out.String()), "BRANCH  WORKTREE    SESSION\nmain    .           no tmux session\nfeat/x  .wk/feat-x  tmux: custom\n")
 }
 
 func TestRunLsDiscoversSessionsWithoutQueryingDetachedWorktrees(t *testing.T) {
@@ -64,7 +64,7 @@ func TestRunLsDiscoversSessionsWithoutQueryingDetachedWorktrees(t *testing.T) {
 			p.writeGlobal("session_template = \"S-{project}-{branch}\"\n")
 			enterTestProject(t, p, p.root)
 			root := mustRealPath(t, p.root)
-			feature := filepath.Join(root, ".worktrees", "feat-review")
+			feature := filepath.Join(root, ".wk", "feat-review")
 			detached := filepath.Join(filepath.Dir(root), "detached")
 			testGit(t, root, "worktree", "add", "-b", "feat/review", feature, "HEAD")
 			testGit(t, root, "worktree", "add", "--detach", detached, "HEAD")
@@ -96,7 +96,7 @@ func TestRunLsDiscoversSessionsWithoutQueryingDetachedWorktrees(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			mustContain(t, human, ".worktrees/feat-review")
+			mustContain(t, human, ".wk/feat-review")
 			mustContain(t, human, backend+": "+label)
 			mustContain(t, human, "no "+backend+" session")
 			mustContain(t, human, "(detached)")

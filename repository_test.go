@@ -14,7 +14,7 @@ func TestRepositoryLayoutFromRootAndLinkedCheckout(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			p := newTestProject(t, "", bare)
-			linked := filepath.Join(p.root, ".worktrees", "feature")
+			linked := filepath.Join(p.root, ".wk", "feature")
 			testGit(t, p.root, "worktree", "add", "-b", "feature", linked, "origin/main")
 			nested := filepath.Join(linked, "src")
 			mustMkdirAll(t, nested)
@@ -56,11 +56,11 @@ func TestIgnoreWorktreesPreservesContentAndIsIdempotent(t *testing.T) {
 	for _, c := range []struct {
 		name, before, want string
 	}{
-		{"missing", "", "/.worktrees/\n"},
-		{"no newline", "node_modules/", "node_modules/\n/.worktrees/\n"},
-		{"newline", "# keep me\n", "# keep me\n/.worktrees/\n"},
-		{"existing", "/.worktrees/\nother\n", "/.worktrees/\nother\n"},
-		{"CRLF", "# keep me\r\n/.worktrees/\r\n", "# keep me\r\n/.worktrees/\r\n"},
+		{"missing", "", "/.wk/\n"},
+		{"no newline", "node_modules/", "node_modules/\n/.wk/\n"},
+		{"newline", "# keep me\n", "# keep me\n/.wk/\n"},
+		{"existing", "/.wk/\nother\n", "/.wk/\nother\n"},
+		{"CRLF", "# keep me\r\n/.wk/\r\n", "# keep me\r\n/.wk/\r\n"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			root := t.TempDir()
@@ -75,7 +75,7 @@ func TestIgnoreWorktreesPreservesContentAndIsIdempotent(t *testing.T) {
 				}
 				mustEqual(t, mustReadFile(t, path), c.want)
 			}
-			testGit(t, root, "check-ignore", "-q", ".worktrees/feature/README")
+			testGit(t, root, "check-ignore", "-q", ".wk/feature/README")
 		})
 	}
 }

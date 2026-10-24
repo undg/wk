@@ -50,7 +50,7 @@ func TestAddRetryRunsSetupConfiguredAfterWorkspaceFailure(t *testing.T) {
 		if err := runCreate("retry", "", backendHerdr); err != nil {
 			t.Fatal(err)
 		}
-		mustEqual(t, mustReadFile(t, filepath.Join(p.root, ".worktrees", "retry", "setup.marker")), "setup")
+		mustEqual(t, mustReadFile(t, filepath.Join(p.root, ".wk", "retry", "setup.marker")), "setup")
 	}
 }
 
@@ -77,7 +77,7 @@ func TestAddWorkspaceFailureShowsRetryTipOnlyInsideHerdr(t *testing.T) {
 			} else {
 				mustNotContain(t, output, "retry workspace creation")
 			}
-			mustEqual(t, mustReadFile(t, filepath.Join(p.root, ".worktrees", "feat-retry", "setup.marker")), "ready")
+			mustEqual(t, mustReadFile(t, filepath.Join(p.root, ".wk", "feat-retry", "setup.marker")), "ready")
 		})
 	}
 }
@@ -95,7 +95,7 @@ func TestDeleteWithoutTeardownDoesNotAnnounceTeardown(t *testing.T) {
 	}
 	mustNotContain(t, output, "running teardown steps")
 	mustContain(t, output, "removing worktree")
-	if _, err := os.Stat(filepath.Join(p.root, ".worktrees", "remove")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(p.root, ".wk", "remove")); !os.IsNotExist(err) {
 		t.Fatalf("worktree was not removed: %v", err)
 	}
 	if branchExists("remove") {

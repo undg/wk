@@ -54,8 +54,8 @@ func TestE2EHerdrAddOnlySwitchesFromLaunchingPane(t *testing.T) {
 				mustNotContain(t, log, "|workspace focus ")
 				mustContain(t, got.output, "workspace ready: test-worktree [project] (leaving focus unchanged)")
 			}
-			mustContain(t, mustReadFile(t, filepath.Join(p.fakeState, "herdr-workspaces")), filepath.Join(mustRealPath(t, p.root), ".worktrees", "test-worktree"))
-			mustEqual(t, gitOutput(t, p, filepath.Join(p.root, ".worktrees", "test-worktree"), "branch", "--show-current"), "test-worktree")
+			mustContain(t, mustReadFile(t, filepath.Join(p.fakeState, "herdr-workspaces")), filepath.Join(mustRealPath(t, p.root), ".wk", "test-worktree"))
+			mustEqual(t, gitOutput(t, p, filepath.Join(p.root, ".wk", "test-worktree"), "branch", "--show-current"), "test-worktree")
 		})
 	}
 }

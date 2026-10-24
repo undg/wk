@@ -1,4 +1,4 @@
 bin/
 /.reports/
 /.cache/metrics/
-/.worktrees/
+/.wk/

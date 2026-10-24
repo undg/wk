@@ -22,7 +22,7 @@ setup = ["printf setup >> setup.marker"]
 	if err := runCreate("feat/login", "rev", backendHerdr); err == nil {
 		t.Fatal("backend failure unexpectedly succeeded")
 	}
-	dir := filepath.Join(root, ".worktrees", "feat-login")
+	dir := filepath.Join(root, ".wk", "feat-login")
 	mustEqual(t, mustReadFile(t, filepath.Join(dir, "setup.marker")), "setup")
 	if err := os.Remove(failure); err != nil {
 		t.Fatal(err)
@@ -36,15 +36,15 @@ setup = ["printf setup >> setup.marker"]
 		t.Fatal(err)
 	}
 	mustEqual(t, mustReadFile(t, filepath.Join(dir, "setup.marker")), "setup")
-	mustEqual(t, mustReadFile(t, filepath.Join(root, ".gitignore")), "# keep this\n/.worktrees/\n")
+	mustEqual(t, mustReadFile(t, filepath.Join(root, ".gitignore")), "# keep this\n/.wk/\n")
 	mustContain(t, mustReadFile(t, filepath.Join(p.fakeState, "herdr.log")), "|worktree open --cwd "+root+" --path "+dir+" --label [rev] feat/login [cave] --no-focus\n")
 	mustEqual(t, gitOutput(t, p, dir, "branch", "--show-current"), "feat/login")
-	testGit(t, root, "check-ignore", "-q", ".worktrees/")
+	testGit(t, root, "check-ignore", "-q", ".wk/")
 
 	if err := runCreate("remote-branch", "", backendTmux); err != nil {
 		t.Fatal(err)
 	}
-	remoteDir := filepath.Join(root, ".worktrees", "remote-branch")
+	remoteDir := filepath.Join(root, ".wk", "remote-branch")
 	mustEqual(t, gitOutput(t, p, remoteDir, "rev-parse", "--abbrev-ref", "@{upstream}"), "origin/remote-branch")
 	mustContain(t, mustReadFile(t, filepath.Join(p.fakeState, "tmux.log")), "new-session -d -s remote-branch [cave] -c "+remoteDir)
 	// A different branch with the same sanitized directory is not adopted.
@@ -65,15 +65,15 @@ teardown = ["printf teardown >> ../../teardown.marker"]
 	}{
 		{"feat/branch", "feat/branch"},
 		{"feat/slug", "feat-slug"},
-		{"feat/path", ".worktrees/feat-path"},
-		{"feat/absolute", filepath.Join(root, ".worktrees", "feat-absolute")},
+		{"feat/path", ".wk/feat-path"},
+		{"feat/absolute", filepath.Join(root, ".wk", "feat-absolute")},
 		{"feat/label", "feat/label [cave]"},
 		{"feat/dot", "."},
 	} {
 		if err := runCreate(c.branch, "", backendTmux); err != nil {
 			t.Fatal(err)
 		}
-		dir := filepath.Join(root, ".worktrees", SanitizeBranch(c.branch))
+		dir := filepath.Join(root, ".wk", SanitizeBranch(c.branch))
 		if c.target == "." {
 			nested := filepath.Join(dir, "src")
 			mustMkdirAll(t, nested)
@@ -135,7 +135,7 @@ func TestDeleteHonorsGitRemovalRefusal(t *testing.T) {
 	if err := runCreate("locked", "", backendTmux); err != nil {
 		t.Fatal(err)
 	}
-	dir := filepath.Join(p.root, ".worktrees", "locked")
+	dir := filepath.Join(p.root, ".wk", "locked")
 	testGit(t, p.root, "worktree", "lock", dir)
 	mustWriteFile(t, filepath.Join(dir, "important"), "keep me")
 	if err := runDelete("locked", backendTmux); err == nil {
@@ -155,7 +155,7 @@ func TestNormalCloneSetupFailureRetriesWithoutRepeatingCompletedSetup(t *testing
 	if err := runCreate("retry", "", backendTmux); err == nil {
 		t.Fatal("setup failure unexpectedly succeeded")
 	}
-	dir := filepath.Join(p.root, ".worktrees", "retry")
+	dir := filepath.Join(p.root, ".wk", "retry")
 	mustDir(t, dir)
 	mustEqual(t, readIfExists(t, filepath.Join(p.fakeState, "tmux-sessions")), "")
 	mustWriteFile(t, filepath.Join(p.root, "allow-setup"), "")
@@ -179,14 +179,14 @@ func TestNormalCloneIgnoreFailureDoesNotCreateBranchOrWorktree(t *testing.T) {
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
-	mustWriteFile(t, path, "/.worktrees/\n!/.worktrees/\n")
+	mustWriteFile(t, path, "/.wk/\n!/.wk/\n")
 	if err := runCreate("failure", "", backendTmux); err == nil {
 		t.Fatal("created worktree despite conflicting ignore rule")
 	}
 	if branchExists("failure") {
 		t.Fatal("created branch before ensuring ignore rule")
 	}
-	if _, err := os.Stat(filepath.Join(p.root, ".worktrees")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(p.root, ".wk")); !os.IsNotExist(err) {
 		t.Fatalf("created container despite ignore failure: %v", err)
 	}
 }
@@ -223,8 +223,8 @@ func TestNormalCloneListShowsMainAndNestedPaths(t *testing.T) {
 		return string(data)
 	}
 	human := stripANSI(capture(false, backendTmux))
-	mustContain(t, human, ".worktrees/feat-list")
-	mustNotContain(t, human, filepath.Join(mustRealPath(t, p.root), ".worktrees"))
+	mustContain(t, human, ".wk/feat-list")
+	mustNotContain(t, human, filepath.Join(mustRealPath(t, p.root), ".wk"))
 	for _, line := range strings.Split(human, "\n") {
 		if strings.Contains(line, mustRealPath(t, outside)) && !strings.HasPrefix(line, "(detached)") {
 			t.Fatalf("detached checkout missing its branch marker: %s", line)
@@ -236,7 +236,7 @@ func TestNormalCloneListShowsMainAndNestedPaths(t *testing.T) {
 	out := capture(true, backendTmux)
 	root := mustRealPath(t, p.root)
 	mustContain(t, out, "main\n"+root+"\n\n")
-	mustContain(t, out, "feat/list\n"+filepath.Join(root, ".worktrees", "feat-list")+"\nfeat/list [project]\n")
+	mustContain(t, out, "feat/list\n"+filepath.Join(root, ".wk", "feat-list")+"\nfeat/list [project]\n")
 	if err := runCreate("feat/list", "rev", backendHerdr); err != nil {
 		t.Fatal(err)
 	}
@@ -269,10 +269,10 @@ func TestNormalCloneCleanSkipsMainBeforeQueryingPR(t *testing.T) {
 			t.Fatal(err)
 		}
 		if answer == "n\n" {
-			mustDir(t, filepath.Join(p.root, ".worktrees", "merged"))
+			mustDir(t, filepath.Join(p.root, ".wk", "merged"))
 		}
 	}
-	if _, err := os.Stat(filepath.Join(p.root, ".worktrees", "merged")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(p.root, ".wk", "merged")); !os.IsNotExist(err) {
 		t.Fatalf("merged checkout still exists: %v", err)
 	}
 	root := mustRealPath(t, p.root)
@@ -290,7 +290,7 @@ func TestNormalCloneTeardownFailurePreservesWorktreeBranchAndSession(t *testing.
 	if err := runDelete("keep", backendTmux); err == nil {
 		t.Fatal("ignored teardown failure")
 	}
-	mustDir(t, filepath.Join(p.root, ".worktrees", "keep"))
+	mustDir(t, filepath.Join(p.root, ".wk", "keep"))
 	if !branchExists("keep") {
 		t.Fatal("deleted branch after teardown failed")
 	}
@@ -299,7 +299,7 @@ func TestNormalCloneTeardownFailurePreservesWorktreeBranchAndSession(t *testing.
 
 func TestNormalCloneInitUsesMainRoot(t *testing.T) {
 	p := newTestProject(t, "", false)
-	linked := filepath.Join(p.root, ".worktrees", "feature")
+	linked := filepath.Join(p.root, ".wk", "feature")
 	testGit(t, p.root, "worktree", "add", "-b", "feature", linked)
 	if err := os.Remove(filepath.Join(p.root, ".wk.toml")); err != nil {
 		t.Fatal(err)

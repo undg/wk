@@ -15,7 +15,7 @@ func TestE2ENormalCloneAddStartsFromCallerCommit(t *testing.T) {
 			case "main":
 				testGit(t, caller, "switch", "-c", "current-feature")
 			case "linked", "detached":
-				caller = filepath.Join(p.root, ".worktrees", "source")
+				caller = filepath.Join(p.root, ".wk", "source")
 				testGit(t, p.root, "worktree", "add", "-b", "current-feature", caller)
 			}
 			testGit(t, caller, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "--allow-empty", "-m", "caller-only commit")
@@ -29,7 +29,7 @@ func TestE2ENormalCloneAddStartsFromCallerCommit(t *testing.T) {
 
 			mustSucceed(t, p.runAt(nested, "", "add", "feat/child", "--tmux"))
 
-			dir := filepath.Join(p.root, ".worktrees", "feat-child")
+			dir := filepath.Join(p.root, ".wk", "feat-child")
 			mustEqual(t, gitOutput(t, p, dir, "rev-parse", "HEAD"), want)
 			mustEqual(t, gitOutput(t, p, dir, "branch", "--show-current"), "feat/child")
 			// Resuming must not require the unused configured base either.
@@ -40,7 +40,7 @@ func TestE2ENormalCloneAddStartsFromCallerCommit(t *testing.T) {
 			}
 			// Remote checkouts still take precedence over the caller's commit.
 			mustSucceed(t, p.runAt(nested, "", "add", "remote-branch", "--tmux"))
-			remoteDir := filepath.Join(p.root, ".worktrees", "remote-branch")
+			remoteDir := filepath.Join(p.root, ".wk", "remote-branch")
 			mustEqual(t, gitOutput(t, p, remoteDir, "rev-parse", "HEAD"), gitOutput(t, p, p.root, "rev-parse", "origin/remote-branch"))
 			mustEqual(t, gitOutput(t, p, remoteDir, "rev-parse", "--abbrev-ref", "@{upstream}"), "origin/remote-branch")
 		})
@@ -52,16 +52,16 @@ func TestE2ENormalCloneListAndCleanFromLinkedSubdirectory(t *testing.T) {
 	mustSucceed(t, p.run("", "add", "merged", "--tmux"))
 	mustSucceed(t, p.run("", "add", "open", "--tmux"))
 	root := mustRealPath(t, p.root)
-	nested := filepath.Join(root, ".worktrees", "open", "src")
+	nested := filepath.Join(root, ".wk", "open", "src")
 	mustMkdirAll(t, nested)
 
 	got := p.runAt(nested, "", "ls", "--porcelain", "--tmux")
 	mustSucceed(t, got)
 	mustContain(t, got.output, "main\n"+root+"\n\n")
-	mustContain(t, got.output, "merged\n"+filepath.Join(root, ".worktrees", "merged")+"\nmerged [project]\n")
+	mustContain(t, got.output, "merged\n"+filepath.Join(root, ".wk", "merged")+"\nmerged [project]\n")
 	got = p.runAt(nested, "", "ls", "--tmux")
 	mustSucceed(t, got)
-	mustContain(t, got.output, ".worktrees/merged")
+	mustContain(t, got.output, ".wk/merged")
 
 	// gh's fake keys by directory basename. The main checkout has a merged
 	// result too, but must never even be queried by clean.
@@ -69,10 +69,10 @@ func TestE2ENormalCloneListAndCleanFromLinkedSubdirectory(t *testing.T) {
 	p.writeGH("merged", "MERGED")
 	p.writeGH("open", "OPEN")
 	mustSucceed(t, p.runAt(nested, "yes\n", "clean", "--tmux"))
-	if _, err := os.Stat(filepath.Join(root, ".worktrees", "merged")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(root, ".wk", "merged")); !os.IsNotExist(err) {
 		t.Fatalf("merged worktree still exists: %v", err)
 	}
-	mustDir(t, filepath.Join(root, ".worktrees", "open"))
+	mustDir(t, filepath.Join(root, ".wk", "open"))
 	mustNotContain(t, mustReadFile(t, filepath.Join(p.fakeState, "gh.log")), root+"|pr view")
 	mustEqual(t, gitOutput(t, p, root, "branch", "--show-current"), "main")
 
@@ -83,13 +83,13 @@ func TestE2ENormalCloneListAndCleanFromLinkedSubdirectory(t *testing.T) {
 
 func TestE2EInitPromptFromLinkedCheckoutUsesOwningRoot(t *testing.T) {
 	p := newTestProject(t, "", false)
-	linked := filepath.Join(p.root, ".worktrees", "linked")
+	linked := filepath.Join(p.root, ".wk", "linked")
 	testGit(t, p.root, "worktree", "add", "-b", "linked", linked)
 	if err := os.Remove(filepath.Join(p.root, ".wk.toml")); err != nil {
 		t.Fatal(err)
 	}
 	mustSucceed(t, p.runAt(linked, "yes\n", "add", "after-init", "--tmux"))
-	mustDir(t, filepath.Join(p.root, ".worktrees", "after-init"))
+	mustDir(t, filepath.Join(p.root, ".wk", "after-init"))
 	mustContain(t, mustReadFile(t, filepath.Join(p.root, ".wk.toml")), "name = \"project\"")
 	if _, err := os.Stat(filepath.Join(linked, ".wk.toml")); !os.IsNotExist(err) {
 		t.Fatalf("scaffolded a linked-checkout config: %v", err)
@@ -109,13 +109,13 @@ teardown = ["cat shared.txt > ../../teardown.marker"]
 			mustWriteFile(t, filepath.Join(p.root, "shared.txt"), "project-owned shared file")
 			caller := p.root
 			if bare {
-				caller = filepath.Join(p.root, ".worktrees", "main")
+				caller = filepath.Join(p.root, ".wk", "main")
 			}
 			nested := filepath.Join(caller, "src")
 			mustMkdirAll(t, nested)
 			mustSucceed(t, p.runAt(nested, "", "add", "feat/shared", "--tmux"))
 
-			dir := filepath.Join(p.root, ".worktrees", "feat-shared")
+			dir := filepath.Join(p.root, ".wk", "feat-shared")
 			mustEqual(t, mustReadFile(t, filepath.Join(dir, "shared.txt")), "project-owned shared file")
 			target, err := os.Readlink(filepath.Join(dir, "shared.txt"))
 			if err != nil {
@@ -125,9 +125,9 @@ teardown = ["cat shared.txt > ../../teardown.marker"]
 			nested = filepath.Join(dir, "src")
 			mustMkdirAll(t, nested)
 			mustSucceed(t, p.runAt(nested, "", "add", "feat/second", "--tmux"))
-			second := filepath.Join(p.root, ".worktrees", "feat-second")
+			second := filepath.Join(p.root, ".wk", "feat-second")
 			mustEqual(t, mustReadFile(t, filepath.Join(second, "shared.txt")), "project-owned shared file")
-			mustSucceed(t, p.runAt(nested, "", "delete", ".worktrees/feat-second", "--tmux"))
+			mustSucceed(t, p.runAt(nested, "", "delete", ".wk/feat-second", "--tmux"))
 			mustSucceed(t, p.run("", "delete", "feat-shared", "--tmux"))
 			mustEqual(t, mustReadFile(t, filepath.Join(p.root, "teardown.marker")), "project-owned shared file")
 			mustEqual(t, mustReadFile(t, filepath.Join(p.root, "shared.txt")), "project-owned shared file")
@@ -156,7 +156,7 @@ func TestBareLayoutsCreateUnderWorktrees(t *testing.T) {
 			if err := runCreate("feat/bare", "", backendTmux); err != nil {
 				t.Fatal(err)
 			}
-			dir := filepath.Join(p.root, ".worktrees", "feat-bare")
+			dir := filepath.Join(p.root, ".wk", "feat-bare")
 			mustDir(t, dir)
 			if _, err := os.Stat(filepath.Join(p.root, ".gitignore")); !os.IsNotExist(err) {
 				t.Fatalf("bare add changed .gitignore: %v", err)
@@ -168,16 +168,16 @@ func TestBareLayoutsCreateUnderWorktrees(t *testing.T) {
 			if err := runCreate("feat/second", "", backendTmux); err != nil {
 				t.Fatal(err)
 			}
-			mustDir(t, filepath.Join(p.root, ".worktrees", "feat-second"))
-			mustEqual(t, gitOutput(t, p, filepath.Join(p.root, ".worktrees", "feat-second"), "rev-parse", "HEAD"), gitOutput(t, p, p.root, "rev-parse", "origin/main"))
+			mustDir(t, filepath.Join(p.root, ".wk", "feat-second"))
+			mustEqual(t, gitOutput(t, p, filepath.Join(p.root, ".wk", "feat-second"), "rev-parse", "HEAD"), gitOutput(t, p, p.root, "rev-parse", "origin/main"))
 			if err := runCreate("release", "", backendTmux); err != nil {
 				t.Fatal(err)
 			}
-			mustEqual(t, gitOutput(t, p, filepath.Join(p.root, ".worktrees", "release"), "rev-parse", "HEAD"), gitOutput(t, p, p.root, "rev-parse", "origin/release"))
+			mustEqual(t, gitOutput(t, p, filepath.Join(p.root, ".wk", "release"), "rev-parse", "HEAD"), gitOutput(t, p, p.root, "rev-parse", "origin/release"))
 			if err := runCreate("origin/explicit-remote", "", backendTmux); err != nil {
 				t.Fatal(err)
 			}
-			mustEqual(t, gitOutput(t, p, filepath.Join(p.root, ".worktrees", "explicit-remote"), "rev-parse", "--abbrev-ref", "@{upstream}"), "origin/explicit-remote")
+			mustEqual(t, gitOutput(t, p, filepath.Join(p.root, ".wk", "explicit-remote"), "rev-parse", "--abbrev-ref", "@{upstream}"), "origin/explicit-remote")
 			if err := runDelete("feat-bare", backendTmux); err != nil {
 				t.Fatal(err)
 			}

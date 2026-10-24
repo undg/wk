@@ -14,7 +14,7 @@ func TestNormalCloneAddBranchesFromCurrentCheckout(t *testing.T) {
 			if checkout == "main" {
 				testGit(t, caller, "switch", "-c", "current-feature")
 			} else {
-				caller = filepath.Join(p.root, ".worktrees", "source")
+				caller = filepath.Join(p.root, ".wk", "source")
 				testGit(t, p.root, "worktree", "add", "-b", "current-feature", caller)
 			}
 			testGit(t, caller, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "--allow-empty", "-m", "caller-only commit")
@@ -30,7 +30,7 @@ func TestNormalCloneAddBranchesFromCurrentCheckout(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			dir := filepath.Join(p.root, ".worktrees", "feat-child")
+			dir := filepath.Join(p.root, ".wk", "feat-child")
 			mustEqual(t, gitOutput(t, p, dir, "rev-parse", "HEAD"), want)
 			mustEqual(t, gitOutput(t, p, dir, "branch", "--show-current"), "feat/child")
 			// A retry from the main checkout must reuse the child branch,
@@ -62,7 +62,7 @@ func TestNormalCloneAddPreservesExistingBranchPrecedence(t *testing.T) {
 			if branch == "local" {
 				name, wantRef = "local", "origin/release"
 			}
-			dir := filepath.Join(p.root, ".worktrees", name)
+			dir := filepath.Join(p.root, ".wk", name)
 			mustEqual(t, gitOutput(t, p, dir, "rev-parse", "HEAD"), gitOutput(t, p, p.root, "rev-parse", wantRef))
 			mustEqual(t, gitOutput(t, p, dir, "rev-parse", "--abbrev-ref", "@{upstream}"), wantRef)
 		})
@@ -75,7 +75,7 @@ func TestCreateBadgeRenameFailureDoesNotAttachAndCanBeRetried(t *testing.T) {
 	if err := runCreate("feat/review", "rev", backendHerdr); err != nil {
 		t.Fatal(err)
 	}
-	dir := filepath.Join(p.root, ".worktrees", "feat-review")
+	dir := filepath.Join(p.root, ".wk", "feat-review")
 	wantCommit := gitOutput(t, p, dir, "rev-parse", "HEAD")
 	logPath := filepath.Join(p.fakeState, "herdr.log")
 	workspaces := filepath.Join(p.fakeState, "herdr-workspaces")
@@ -124,7 +124,7 @@ func TestNormalCloneAddRejectsUnbornCurrentBranch(t *testing.T) {
 	if branchExists("feat/child") {
 		t.Fatal("created branch despite invalid starting point")
 	}
-	if _, err := os.Stat(filepath.Join(p.root, ".worktrees")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(p.root, ".wk")); !os.IsNotExist(err) {
 		t.Fatalf("created worktree container despite invalid starting point: %v", err)
 	}
 }

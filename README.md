@@ -51,10 +51,10 @@ echo "gitdir: ./.bare" > .git
 git --git-dir=.bare config core.hooksPath "$PWD/hooks"
 
 # add the first worktree (usually main)
-git worktree add .worktrees/main main
+git worktree add .wk/main main
 ```
 
-At this point `~/Code/<project>/` contains `.bare/`, `.git` (the gitfile), and `.worktrees/main/` (your first worktree). Any files you want symlinked into *every* worktree (shared env files, `AGENTS.md`, etc.) go at the project root too, as siblings of `.bare/` — `wk`'s `setup` steps (below) `ln -s ../../<file> .` them into new worktrees. The optional hooks setting uses an absolute path because Git resolves relative hook paths from different directories for different hooks.
+At this point `~/Code/<project>/` contains `.bare/`, `.git` (the gitfile), and `.wk/main/` (your first worktree). Any files you want symlinked into *every* worktree (shared env files, `AGENTS.md`, etc.) go at the project root too, as siblings of `.bare/` — `wk`'s `setup` steps (below) `ln -s ../../<file> .` them into new worktrees. The optional hooks setting uses an absolute path because Git resolves relative hook paths from different directories for different hooks.
 
 Finish setup by adding `.wk.toml` (next section) and running `wk init` from this directory if you'd rather scaffold it than hand-write it.
 
@@ -69,18 +69,18 @@ wk init
 wk add feat/login
 ```
 
-`wk add` creates `.worktrees/feat-login/` inside the main checkout, using the same branch sanitization as bare projects. New branches start at the caller's current `HEAD`, not the configured `base_ref`. This includes invocation from a linked worktree or a subdirectory, and detached checkouts. Only committed changes are included. Before creating the first linked worktree, it adds `/.worktrees/` to the main checkout's `.gitignore`, preserving existing content and avoiding duplicate entries. Commit that ignore rule if you want it shared with collaborators. An ignore-file read or write failure, or a conflicting rule that leaves the container unignored, stops creation.
+`wk add` creates `.wk/feat-login/` inside the main checkout, using the same branch sanitization as bare projects. New branches start at the caller's current `HEAD`, not the configured `base_ref`. This includes invocation from a linked worktree or a subdirectory, and detached checkouts. Only committed changes are included. Before creating the first linked worktree, it adds `/.wk/` to the main checkout's `.gitignore`, preserving existing content and avoiding duplicate entries. Commit that ignore rule if you want it shared with collaborators. An ignore-file read or write failure, or a conflicting rule that leaves the container unignored, stops creation.
 
 ```text
 project/
   .git/
   .gitignore
   .wk.toml
-  .worktrees/
+  .wk/
     feat-login/
 ```
 
-Git metadata determines the owning project root, including when invoked from a linked worktree or a subdirectory. Both bare repositories and traditional clones create `<project-root>/.worktrees/<sanitized-branch>/`; for traditional clones, the project root is the main checkout. No layout flag or configuration setting is required. Existing registered worktrees are not moved. Bare projects do not need a project-root `.gitignore`.
+Git metadata determines the owning project root, including when invoked from a linked worktree or a subdirectory. Both bare repositories and traditional clones create `<project-root>/.wk/<sanitized-branch>/`; for traditional clones, the project root is the main checkout. No layout flag or configuration setting is required. Existing registered worktrees are not moved. Bare projects do not need a project-root `.gitignore`.
 
 The main checkout remains visible in `wk ls`, but `wk delete` refuses to remove it and `wk clean` skips it, regardless of its branch name.
 
@@ -186,7 +186,7 @@ wk --tmux add feat/123       # same as above, but on tmux for this run only
 
 If a prior `wk add` failed, run the same command again. `wk` verifies that the existing directory is the expected Git worktree and resumes incomplete work. New worktrees are checkpointed in Git's per-worktree metadata before `setup` starts: a failed setup is retried, while a later Herdr/tmux failure retries only the session step. Worktrees created before this behavior have no checkpoint, so `wk` safely skips their potentially non-idempotent setup and resumes the session instead. An existing directory that is not the expected registered worktree, or belongs to another branch, remains an error.
 
-`wk` finds the owning project through Git's common repository metadata, so commands work from the root, linked checkouts, or their subdirectories. `wk delete .` targets the caller's current worktree, even from a subdirectory. Deletion accepts a branch, sanitized directory name, project-relative path such as `.worktrees/feat-login`, or absolute registered-worktree path; rendered session-template names remain a compatibility fallback. An unregistered directory cannot be deleted. If the owning root has no `.wk.toml`, `wk` offers to scaffold it there (`[y/N]`, defaults to no). `wk init` also resolves the owning root when invoked from inside a checkout; outside Git it scaffolds in cwd.
+`wk` finds the owning project through Git's common repository metadata, so commands work from the root, linked checkouts, or their subdirectories. `wk delete .` targets the caller's current worktree, even from a subdirectory. Deletion accepts a branch, sanitized directory name, project-relative path such as `.wk/feat-login`, or absolute registered-worktree path; rendered session-template names remain a compatibility fallback. An unregistered directory cannot be deleted. If the owning root has no `.wk.toml`, `wk` offers to scaffold it there (`[y/N]`, defaults to no). `wk init` also resolves the owning root when invoked from inside a checkout; outside Git it scaffolds in cwd.
 
 In bare repositories, new branches created off `base_ref` (e.g. `origin/main`) are meant to track `base_ref` immediately, so `git pull --rebase` works before you've ever pushed — but `wk` doesn't yet set this explicitly (see [[spec]]'s plan-of-action step 6+); today it only happens if your global `branch.autoSetupMerge` git config already does it, same as the old pgm-fe POC relied on. Check `git status`/`git branch -vv` after your first `wk add` in a repo to confirm tracking landed on `base_ref` before assuming it. Once you're ready to push, run `gup` — it re-points tracking from `base_ref` to the branch's own remote counterpart.
 

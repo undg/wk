@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-const worktreesDirectory = ".worktrees"
+const worktreesDirectory = ".wk"
 
 type repositoryContext struct {
 	Root         string
@@ -67,7 +67,7 @@ func ensureWorktreesIgnored(root string) error {
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("reading %s: %w", path, err)
 	}
-	const entry = "/.worktrees/"
+	const entry = "/.wk/"
 	for _, line := range strings.Split(string(data), "\n") {
 		if strings.TrimSuffix(line, "\r") == entry {
 			return nil

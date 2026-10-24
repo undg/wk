@@ -30,7 +30,7 @@ func TestCreateRespectsSetupCheckpoints(t *testing.T) {
 			}
 			p := newTestProject(t, config, false)
 			enterTestProject(t, p, p.root)
-			dir := filepath.Join(p.root, ".worktrees", "resume")
+			dir := filepath.Join(p.root, ".wk", "resume")
 			testGit(t, p.root, "worktree", "add", "-b", "resume", dir)
 			checkpoint, err := setupCheckpointPath(dir)
 			if err != nil {
@@ -90,7 +90,7 @@ func TestCreateSetupFailureRetriesBeforeSessionAndReleasesProgress(t *testing.T)
 	if err := runCreate("retry", "", backendHerdr); err == nil {
 		t.Fatal("setup failure unexpectedly succeeded")
 	}
-	dir := filepath.Join(p.root, ".worktrees", "retry")
+	dir := filepath.Join(p.root, ".wk", "retry")
 	state, err := readSetupState(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -138,7 +138,7 @@ func TestCreateSetupFailureRetriesBeforeSessionAndReleasesProgress(t *testing.T)
 func TestCreateStopsBeforeSessionWhenSetupCheckpointCannotBeRead(t *testing.T) {
 	p := newTestProject(t, `setup = ["touch setup.marker"]`, false)
 	enterTestProject(t, p, p.root)
-	dir := filepath.Join(p.root, ".worktrees", "resume")
+	dir := filepath.Join(p.root, ".wk", "resume")
 	testGit(t, p.root, "worktree", "add", "-b", "resume", dir)
 	checkpoint, err := setupCheckpointPath(dir)
 	if err != nil {

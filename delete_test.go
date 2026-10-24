@@ -34,7 +34,7 @@ func TestResolveWorktreeTargetPrecedence(t *testing.T) {
 				testGit(t, p.root, "worktree", "add", "-b", "root-owner", filepath.Join(p.root, "session-topic"))
 			}
 			if c.slugPath {
-				testGit(t, p.root, "worktree", "add", "-b", "container-owner", filepath.Join(p.root, ".worktrees", "session-topic"))
+				testGit(t, p.root, "worktree", "add", "-b", "container-owner", filepath.Join(p.root, ".wk", "session-topic"))
 			}
 			cfg, err := loadProjectConfig()
 			if err != nil {
@@ -52,7 +52,7 @@ func TestResolveWorktreeTargetPrecedence(t *testing.T) {
 func TestResolveWorktreeTargetSymlinkPaths(t *testing.T) {
 	p := newTestProject(t, "", false)
 	enterTestProject(t, p, p.root)
-	dir := filepath.Join(p.root, ".worktrees", "feature")
+	dir := filepath.Join(p.root, ".wk", "feature")
 	testGit(t, p.root, "worktree", "add", "-b", "feature", dir)
 	alias := filepath.Join(p.root, "alias")
 	if err := os.Symlink(dir, alias); err != nil {
@@ -62,7 +62,7 @@ func TestResolveWorktreeTargetSymlinkPaths(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, target := range []string{alias, "alias", ".worktrees/feature", "feature"} {
+	for _, target := range []string{alias, "alias", ".wk/feature", "feature"} {
 		got, err := resolveWorktreeTarget(target, p.root, cfg)
 		if err != nil {
 			t.Fatalf("resolve %q: %v", target, err)
@@ -73,7 +73,7 @@ func TestResolveWorktreeTargetSymlinkPaths(t *testing.T) {
 
 func TestDeleteDotUsesLinkedCheckoutSubdirectoryBeforeConfigWalkup(t *testing.T) {
 	p := newTestProject(t, "", false)
-	dir := filepath.Join(p.root, ".worktrees", "feature")
+	dir := filepath.Join(p.root, ".wk", "feature")
 	testGit(t, p.root, "worktree", "add", "-b", "feature", dir)
 	nested := filepath.Join(dir, "src", "nested")
 	mustMkdirAll(t, nested)
@@ -93,7 +93,7 @@ func TestDeleteDotUsesLinkedCheckoutSubdirectoryBeforeConfigWalkup(t *testing.T)
 func TestDetachedCheckoutResolvesByPathButDeleteRefusesBeforeTeardown(t *testing.T) {
 	p := newTestProject(t, `teardown = ["touch teardown-ran"]`, false)
 	enterTestProject(t, p, p.root)
-	dir := filepath.Join(p.root, ".worktrees", "detached")
+	dir := filepath.Join(p.root, ".wk", "detached")
 	testGit(t, p.root, "worktree", "add", "--detach", dir, "HEAD")
 	cfg, err := loadProjectConfig()
 	if err != nil {

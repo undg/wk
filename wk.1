@@ -16,7 +16,7 @@ Run commands from the project root, any linked worktree, or their
 subdirectories.  Git's common repository metadata identifies the owning
 project and its layout automatically; no layout flag is needed.
 Both bare repositories and traditional clones create worktrees under
-.I <project-root>/.worktrees/<sanitized-branch>/ .
+.I <project-root>/.wk/<sanitized-branch>/ .
 The project root is the bare repository's root or wrapper directory, or the
 main checkout of a traditional clone.
 Existing registered worktrees are not relocated.
@@ -80,7 +80,7 @@ is an alias.  The argument may be a worktree directory, branch name, or
 for the current worktree, including when invoked from a subdirectory.
 Both repository layouts accept the sanitized directory name or a
 project-relative path such as
-.IR .worktrees/feat-login .
+.IR .wk/feat-login .
 Absolute registered-worktree paths and rendered session-template names
 (the latter as a compatibility fallback) are also accepted.
 Only registered checkouts may be removed.  The main checkout cannot be
@@ -130,7 +130,7 @@ before or after the command; if more than one is supplied, the last one wins.
 Before creating a linked worktree in a traditional clone,
 .B add
 ensures the anchored entry
-.B /.worktrees/
+.B /.wk/
 exists in the main checkout's
 .IR .gitignore .
 Existing content is preserved and the entry is not duplicated.  Read or write

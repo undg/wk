@@ -35,13 +35,13 @@ func TestParseWorktreePorcelain(t *testing.T) {
 func TestCleanWorktreesSkipsMainCheckoutEvenWhenMerged(t *testing.T) {
 	entries := []worktreeEntry{
 		{Dir: "/repo", Branch: "feature-not-main"},
-		{Dir: "/repo/.worktrees/main", Branch: "main"},
+		{Dir: "/repo/.wk/main", Branch: "main"},
 		{Dir: "/repo/detached"},
 	}
 	states := fakePRLister{
-		"/repo":                 "MERGED",
-		"/repo/.worktrees/main": "MERGED",
-		"/repo/detached":        "MERGED",
+		"/repo":          "MERGED",
+		"/repo/.wk/main": "MERGED",
+		"/repo/detached": "MERGED",
 	}
 	var deleted []string
 	err := cleanWorktrees(entries, "/repo", states, func(string) bool { return true }, func(dir string) error {
@@ -51,7 +51,7 @@ func TestCleanWorktreesSkipsMainCheckoutEvenWhenMerged(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(deleted, []string{"/repo/.worktrees/main"}) {
+	if !reflect.DeepEqual(deleted, []string{"/repo/.wk/main"}) {
 		t.Fatalf("deleted %v, want only linked checkout on branch main", deleted)
 	}
 }

@@ -60,7 +60,7 @@ herdr_progress = false
 
 func TestProjectConfigInitPromptResolvesMainRoot(t *testing.T) {
 	p := newTestProject(t, "", false)
-	linked := filepath.Join(p.root, ".worktrees", "feature")
+	linked := filepath.Join(p.root, ".wk", "feature")
 	testGit(t, p.root, "worktree", "add", "-b", "feature", linked)
 	if err := os.Remove(filepath.Join(p.root, ".wk.toml")); err != nil {
 		t.Fatal(err)
@@ -111,7 +111,7 @@ func TestProjectConfigUsesOwningRootNotTrackedCheckoutConfig(t *testing.T) {
 	testGit(t, p.root, "config", "user.email", "wk@example.invalid")
 	testGit(t, p.root, "add", ".wk.toml")
 	testGit(t, p.root, "commit", "-m", "project config")
-	linked := filepath.Join(p.root, ".worktrees", "feature")
+	linked := filepath.Join(p.root, ".wk", "feature")
 	testGit(t, p.root, "worktree", "add", "-b", "feature", linked)
 	mustWriteFile(t, filepath.Join(p.root, ".wk.toml"), "name = \"edited-owner\"\nbase_ref = \"origin/main\"\n")
 	mustWriteFile(t, filepath.Join(linked, ".wk.toml"), "not valid toml[")
