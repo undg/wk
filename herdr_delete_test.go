@@ -48,7 +48,9 @@ func TestE2EHerdrDeleteFocusesProjectRoot(t *testing.T) {
 	}
 }
 
-func TestE2EHerdrDeleteFallsBackWithoutStealingFocus(t *testing.T) {
+// Run deletion in-process as well as through the CLI above: native coverage
+// and mutation tools cannot observe the separately built E2E binary.
+func TestHerdrDeleteFocusSafety(t *testing.T) {
 	child := `{"workspace_id":"w0","worktree":{"repo_key":"repo","is_linked_worktree":true}}`
 	parent := `{"workspace_id":"root","worktree":{"repo_key":"repo","is_linked_worktree":false}}`
 	for _, c := range []struct {
@@ -60,9 +62,13 @@ func TestE2EHerdrDeleteFallsBackWithoutStealingFocus(t *testing.T) {
 		focusFails bool
 		wantFocus  bool
 	}{
+		{name: "focused child returns to parent", focused: "w0", workspaces: child + "," + parent, wantFocus: true},
 		{name: "background deletion", focused: "elsewhere", workspaces: child + "," + parent},
 		{name: "no parent", focused: "w0", workspaces: child},
 		{name: "ambiguous parent", focused: "w0", workspaces: child + "," + parent + `,{"workspace_id":"second-root","worktree":{"repo_key":"repo","is_linked_worktree":false}}`},
+		{name: "parent missing workspace ID", focused: "w0", workspaces: child + `,{"worktree":{"repo_key":"repo","is_linked_worktree":false}}`},
+		{name: "invalid parent before valid parent", focused: "w0", workspaces: child + `,{"worktree":{"repo_key":"repo","is_linked_worktree":false}},` + parent},
+		{name: "linked sibling is not parent", focused: "w0", workspaces: child + `,{"workspace_id":"main","worktree":{"repo_key":"repo","is_linked_worktree":true}},` + parent, wantFocus: true},
 		{name: "different repository", focused: "w0", workspaces: child + `,{"workspace_id":"root","worktree":{"repo_key":"other","is_linked_worktree":false}}`},
 		{name: "parent missing linked flag", focused: "w0", workspaces: child + `,{"workspace_id":"root","worktree":{"repo_key":"repo"}}`},
 		{name: "parent null linked flag", focused: "w0", workspaces: child + `,{"workspace_id":"root","worktree":{"repo_key":"repo","is_linked_worktree":null}}`},
@@ -94,12 +100,24 @@ func TestE2EHerdrDeleteFallsBackWithoutStealingFocus(t *testing.T) {
 				p.env = setEnv(p.env, map[string]string{"HERDR_ENV": "1"})
 			}
 
-			mustSucceed(t, p.run("", "delete", "feature"))
+			enterTestProject(t, p, p.root)
+			output, err := captureWorkflowOutput(t, func() error { return runDelete("feature", backendHerdr) })
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c.focusFails {
+				mustContain(t, output, "could not focus parent workspace")
+			} else {
+				mustNotContain(t, output, "could not focus parent workspace")
+			}
 
 			log := mustReadFile(t, filepath.Join(p.fakeState, "herdr.log"))
 			mustContain(t, log, "|workspace close w0\n")
 			if strings.Contains(log, "|workspace focus ") != c.wantFocus {
 				t.Fatalf("unexpected focus behavior:\n%s", log)
+			}
+			if c.wantFocus {
+				mustContain(t, log, "|workspace focus root\n|workspace close w0\n")
 			}
 			if c.outside {
 				mustNotContain(t, log, "|api snapshot")
@@ -107,6 +125,33 @@ func TestE2EHerdrDeleteFallsBackWithoutStealingFocus(t *testing.T) {
 			mustEqual(t, gitOutput(t, p, p.root, "branch", "--list", "feature"), "")
 		})
 	}
+}
+
+func TestHerdrKillMissingWorkspaceLeavesFocusUnchanged(t *testing.T) {
+	p := newE2EProject(t, "")
+	enterTestProject(t, p, p.root)
+	t.Setenv("HERDR_ENV", "1")
+	if err := (herdrBackend{}).Kill(session{Dir: p.root}); err == nil {
+		t.Fatal("closing a missing workspace succeeded")
+	}
+	log := mustReadFile(t, filepath.Join(p.fakeState, "herdr.log"))
+	mustNotContain(t, log, "|api snapshot")
+	mustNotContain(t, log, "|workspace focus ")
+	mustNotContain(t, log, "|workspace close ")
+}
+
+func TestHerdrAttachStopsAfterFocusFailure(t *testing.T) {
+	p := newE2EProject(t, "")
+	mustSucceed(t, p.run("", "add", "feature"))
+	mustWriteFile(t, filepath.Join(p.fakeState, "herdr-focus-fail"), "")
+	mustWriteFile(t, filepath.Join(p.fakeState, "herdr.log"), "")
+	enterTestProject(t, p, p.root)
+	if err := (herdrBackend{}).AttachOrSwitch(session{Dir: filepath.Join(p.root, ".wk", "feature")}); err == nil {
+		t.Fatal("attachment ignored the failed focus request")
+	}
+	log := mustReadFile(t, filepath.Join(p.fakeState, "herdr.log"))
+	mustContain(t, log, "|workspace focus w0\n")
+	mustNotContain(t, log, "|\n") // No bare herdr TUI launch after failure.
 }
 
 func TestE2EHerdrFailedDeleteLeavesFocusUnchanged(t *testing.T) {
