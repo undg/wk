@@ -7,7 +7,7 @@ MAN1DIR ?= $(MANDIR)/man1
 DESTDIR ?=
 INSTALL ?= install
 DIRTY := $(shell test -z "$$(git status --porcelain 2>/dev/null)" || echo -dirty)
-VERSION := $(shell git describe --tags --always 2>/dev/null || echo dev)$(DIRTY)
+VERSION := $(shell (git describe --tags --always 2>/dev/null || echo dev) | sed -E 's/-([0-9]+)-g([0-9a-f]+)$$/-\1-\2/')$(DIRTY)
 
 .PHONY: help
 help:
