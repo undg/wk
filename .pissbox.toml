@@ -1,0 +1,7 @@
+# Keep Linux binaries separate from host builds, including bin/wk.
+isolated_directories = ["bin"]
+
+setup = [
+  "make tools",
+]
+

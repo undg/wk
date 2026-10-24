@@ -1,6 +1,7 @@
 name = "wk"                    # optional; overrides folder name for the session template's {project}
 
 setup = [
+  "if [ -f ../../.pissbox.toml ] && [ ! -e .pissbox.toml ] && [ ! -L .pissbox.toml ]; then ln -s ../../.pissbox.toml .pissbox.toml; fi",
   "make tools",
 ]
 
