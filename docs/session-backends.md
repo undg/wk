@@ -25,7 +25,11 @@ Tmux sessions are addressed by the name rendered from `session_template`. Unlike
 
 Inside Herdr, `wk add` focuses its destination only if the launching workspace, tab, and pane are still active when creation finishes. Switching elsewhere leaves focus unchanged and prints that the workspace is ready. Missing caller identity or unavailable/incomplete focus snapshots also leave focus alone.
 
-Outside Herdr, WK launches the TUI and attaches. Tmux switches clients inside tmux and attaches otherwise.
+When deletion closes the currently focused linked-worktree workspace inside Herdr, WK first focuses its project's top-level workspace. The parent shares the child's nonempty `worktree.repo_key` and explicitly reports `worktree.is_linked_worktree = false`; exactly one parent must match. This works for normal checkouts and bare repository roots, independent of labels or branch names. A linked worktree named `main` is still a child.
+
+Focus is checked after teardown and Git deletion, immediately before closing the workspace. Deleting a background workspace or switching elsewhere during teardown leaves focus unchanged. Missing metadata, an unavailable snapshot, an ambiguous or missing parent, or a failed focus request leaves Herdr's default close behavior in place. Root-workspace closure is unchanged. Herdr's focus command affects all attached clients; focus and close are separate API requests.
+
+Outside Herdr, WK launches the TUI and attaches on add; deletion does not explicitly change focus. Tmux switches clients inside tmux and attaches otherwise; its deletion behavior is unchanged.
 
 ## Progress indicator
 

@@ -86,6 +86,14 @@ Absolute registered-worktree paths and rendered session-template names
 Only registered checkouts may be removed.  The main checkout cannot be
 deleted, regardless of its branch name.  A Git removal error stops deletion;
 locked worktrees are not recursively deleted as a fallback.
+.PP
+Inside Herdr, deleting the currently focused linked-worktree workspace returns
+focus to the project's top-level workspace before closing the child, after
+Git deletion has completed.  Both normal and bare repositories are supported;
+a linked worktree named main is not the project root.  Deleting a background
+workspace or switching elsewhere during teardown leaves focus unchanged.
+If the parent cannot be identified uniquely or focused, Herdr's default close
+behavior applies.  Tmux behavior is unchanged.
 .TP
 .B clean
 Offer to remove worktrees whose pull request has merged.  This command uses

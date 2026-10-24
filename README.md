@@ -123,6 +123,8 @@ WK owns Git operations; Herdr and tmux host the sessions. Herdr workspaces are m
 
 Inside Herdr, WK focuses a new workspace only if you are still in the launching workspace, tab, and pane when it finishes. Switching elsewhere leaves focus alone.
 
+Deleting the focused linked worktree returns you to the project's top-level Herdr workspace, for both normal and bare repositories. A child named `main` is not the project root. Deleting a background worktree leaves focus unchanged. If the parent cannot be identified uniquely or focused, Herdr's default close behavior applies. Tmux behavior is unchanged.
+
 See [backend details](docs/session-backends.md) for command mapping, progress reporting, setup checkpoints, and deletion order.
 
 ### Shell completion

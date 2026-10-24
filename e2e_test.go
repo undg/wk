@@ -626,7 +626,14 @@ if [ "$1" = workspace ] && [ "$2" = rename ]; then
   printf '{}'\n
   exit 0
 fi
-if [ "$1" = workspace ] && [ "$2" = focus ]; then printf '{}'\n; exit 0; fi
+if [ "$1" = workspace ] && [ "$2" = focus ]; then
+  if [ -f "$WK_FAKE_STATE/herdr-focus-fail" ]; then
+    echo 'herdr focus failed' >&2
+    exit 1
+  fi
+  printf '{}'\n
+  exit 0
+fi
 if [ "$1" = workspace ] && [ "$2" = close ]; then
   grep -Fv "$3	" "$state" > "$state.next" || :
   mv "$state.next" "$state"

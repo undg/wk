@@ -77,6 +77,7 @@ func (herdrBackend) Kill(s session) error {
 	if err != nil {
 		return err
 	}
+	herdrFocusParentBeforeClose(ws)
 	_, err = runHerdr("workspace", "close", ws.WorkspaceID)
 	return err
 }
@@ -113,7 +114,9 @@ type herdrWorkspace struct {
 	// Absent for workspaces that aren't a git checkout, leaving
 	// CheckoutPath empty so it never matches a resolved worktree path.
 	Worktree struct {
-		CheckoutPath string `json:"checkout_path"`
+		CheckoutPath     string `json:"checkout_path"`
+		RepoKey          string `json:"repo_key"`
+		IsLinkedWorktree *bool  `json:"is_linked_worktree"`
 	} `json:"worktree"`
 }
 
