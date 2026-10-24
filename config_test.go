@@ -18,7 +18,7 @@ func enterTestProject(t *testing.T, p *e2eProject, dir string) {
 	}
 	t.Setenv("TMUX", "")
 	t.Setenv("HERDR_WORKSPACE_ID", "")
-	t.Chdir(dir)
+	t.Chdir(mustRealPath(t, dir))
 }
 
 func TestProjectConfigMergesGlobalDefaultsAndLocalOverrides(t *testing.T) {

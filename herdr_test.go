@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -17,6 +18,47 @@ const herdrWorkspaceListFixture = `{"id":"cli:workspace:list","result":{"type":"
 {"active_tab_id":"w1J:t1","agent_status":"done","focused":false,"label":"feat/606895/non-root-user","number":11,"pane_count":2,"tab_count":1,"workspace_id":"w1J","worktree":{"checkout_path":"/Users/x/Code/pgm-fe/feat-606895-non-root-user","is_linked_worktree":true,"repo_key":"/Users/x/Code/pgm-fe/.bare","repo_name":"pgm-fe","repo_root":"/Users/x/Code/pgm-fe"}},
 {"active_tab_id":"w1K:t1","agent_status":"idle","focused":true,"label":"wk.go","number":12,"pane_count":2,"tab_count":1,"workspace_id":"w1K"}
 ]}}`
+
+// Trimmed from the user's real `herdr api snapshot` after `git worktree remove`
+// of the wk-contract-probe checkout. Paths are anonymized. The corresponding
+// `workspace list` also retained the child's checkout_path and worktree metadata.
+// The focused workspace was unrelated and is omitted from this fixture.
+const herdrSnapshotAfterRemovalFixture = `{"result":{"snapshot":{"focused_workspace_id":"w66","workspaces":[
+{"workspace_id":"w51","label":"wk","worktree":{"checkout_path":"/Users/x/Code/wk","is_linked_worktree":false,"repo_key":"/Users/x/Code/wk/.git"}},
+{"workspace_id":"w6D","label":"wk-contract-probe","worktree":{"checkout_path":"/private/tmp/wk-contract-probe/checkout","is_linked_worktree":true,"repo_key":"/Users/x/Code/wk/.git"}}
+]}}}`
+
+func TestParseHerdrSnapshotAfterCheckoutRemoval(t *testing.T) {
+	p := newE2EProject(t, "")
+	enterTestProject(t, p, p.root)
+	mustWriteFile(t, filepath.Join(p.fakeState, "herdr-focus.json"), herdrSnapshotAfterRemovalFixture)
+
+	snapshot, err := currentHerdrSnapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustEqual(t, snapshot.Workspace, "w66")
+	if len(snapshot.Workspaces) != 2 {
+		t.Fatalf("parsed %d workspaces, want 2", len(snapshot.Workspaces))
+	}
+	for _, c := range []struct {
+		path, id string
+		linked   bool
+	}{
+		{path: "/Users/x/Code/wk", id: "w51", linked: false},
+		{path: "/private/tmp/wk-contract-probe/checkout", id: "w6D", linked: true},
+	} {
+		ws, err := findWorkspaceForPath(snapshot.Workspaces, c.path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		mustEqual(t, ws.WorkspaceID, c.id)
+		mustEqual(t, ws.Worktree.RepoKey, "/Users/x/Code/wk/.git")
+		if ws.Worktree.IsLinkedWorktree == nil || *ws.Worktree.IsLinkedWorktree != c.linked {
+			t.Errorf("workspace %s: linked flag = %v, want %t", c.id, ws.Worktree.IsLinkedWorktree, c.linked)
+		}
+	}
+}
 
 func fixtureWorkspaces(t *testing.T) []herdrWorkspace {
 	t.Helper()

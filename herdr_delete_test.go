@@ -146,7 +146,7 @@ func TestHerdrAttachStopsAfterFocusFailure(t *testing.T) {
 	mustWriteFile(t, filepath.Join(p.fakeState, "herdr-focus-fail"), "")
 	mustWriteFile(t, filepath.Join(p.fakeState, "herdr.log"), "")
 	enterTestProject(t, p, p.root)
-	if err := (herdrBackend{}).AttachOrSwitch(session{Dir: filepath.Join(p.root, ".wk", "feature")}); err == nil {
+	if err := (herdrBackend{}).AttachOrSwitch(session{Dir: filepath.Join(mustRealPath(t, p.root), ".wk", "feature")}); err == nil {
 		t.Fatal("attachment ignored the failed focus request")
 	}
 	log := mustReadFile(t, filepath.Join(p.fakeState, "herdr.log"))
