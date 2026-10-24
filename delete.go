@@ -13,7 +13,7 @@ func resolveWorktreeTarget(raw, start string, cfg ProjectConfig) (string, error)
 	if err != nil {
 		return "", err
 	}
-	paths := []string{filepath.Join(cfg.Repository.Root, raw), filepath.Join(cfg.Repository.WorktreeRoot, raw)}
+	paths := []string{filepath.Join(cfg.Repository.Root, raw), filepath.Join(cfg.Repository.Root, worktreesDirectory, raw)}
 	switch {
 	case raw == ".":
 		current, err := gitAt(start, "rev-parse", "--show-toplevel")

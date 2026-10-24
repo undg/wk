@@ -1,4 +1,4 @@
-.TH WK 1 "2026-10-23" "wk" "User Commands"
+.TH WK 1 "2026-10-24" "wk" "User Commands"
 .SH NAME
 wk \- manage Git worktrees and their development sessions
 .SH SYNOPSIS
@@ -15,12 +15,10 @@ configured or requested.
 Run commands from the project root, any linked worktree, or their
 subdirectories.  Git's common repository metadata identifies the owning
 project and its layout automatically; no layout flag is needed.
-Bare projects create worktrees directly under the project root, normally
-next to the
-.I .bare
-Git directory.  Traditional clones create them under
-.I .worktrees/
-in the main checkout.  Both layouts use the same sanitized branch names.
+Both bare repositories and traditional clones create worktrees under
+.I <project-root>/.worktrees/<sanitized-branch>/ .
+The project root is the bare repository's root or wrapper directory, or the
+main checkout of a traditional clone.
 Existing registered worktrees are not relocated.
 .PP
 The owning project root contains
@@ -80,7 +78,7 @@ worktree metadata.
 is an alias.  The argument may be a worktree directory, branch name, or
 .B .
 for the current worktree, including when invoked from a subdirectory.
-Traditional clones also accept the sanitized directory name or a
+Both repository layouts accept the sanitized directory name or a
 project-relative path such as
 .IR .worktrees/feat-login .
 Absolute registered-worktree paths and rendered session-template names
@@ -142,10 +140,9 @@ with collaborators.
 .PP
 Setup and teardown commands run inside the target worktree.  Relative paths
 to shared files at the project root therefore use
-.I ../
-for bare layouts and
 .I ../../
-for traditional clones.  Shell commands are not rewritten automatically.
+in both repository layouts.  Shell commands are not rewritten automatically.
+Bare projects do not need a project-root ignore file.
 .SH FILES
 .TP
 .I .wk.toml

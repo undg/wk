@@ -111,7 +111,7 @@ func newTestProject(t *testing.T, repoConfig string, bare bool) *e2eProject {
 		for _, branch := range []string{"main", "release", "remote-branch", "explicit-remote"} {
 			testGit(t, p.root, "update-ref", "refs/remotes/origin/"+branch, "refs/heads/"+branch)
 		}
-		testGit(t, p.root, "worktree", "add", "main", "main")
+		testGit(t, p.root, "worktree", "add", ".worktrees/main", "main")
 	} else {
 		testGit(t, root, "clone", "--branch=main", remote, p.root)
 	}
@@ -245,7 +245,7 @@ func TestE2EAddConfigurationBackendFlagsAndLs(t *testing.T) {
 	p := newE2EProject(t, `name = "cave"
 base_ref = "origin/release"
 setup = ["printf setup > setup.marker"]
-teardown = ["test -f setup.marker && printf teardown > ../teardown.marker"]
+teardown = ["test -f setup.marker && printf teardown > ../../teardown.marker"]
 `)
 	p.writeGlobal(`default_base_ref = "origin/main"
 session_template = "S-{project}-{branch}"
@@ -272,7 +272,7 @@ session_backend = "tmux"
 	} {
 		got := p.run("", c.args...)
 		mustSucceed(t, got)
-		dir := filepath.Join(p.root, SanitizeBranch(c.branch))
+		dir := filepath.Join(p.root, ".worktrees", SanitizeBranch(c.branch))
 		mustDir(t, dir)
 		mustEqual(t, gitOutput(t, p, p.root, "-C", dir, "rev-parse", "--abbrev-ref", "HEAD"), c.branch)
 		if c.branch == "feat/one" {
@@ -285,12 +285,12 @@ session_backend = "tmux"
 			mustContain(t, mustReadFile(t, filepath.Join(p.fakeState, "herdr-workspaces")), "S-cave-"+c.branch)
 		}
 	}
-	mustEqual(t, gitOutput(t, p, p.root, "-C", filepath.Join(p.root, "explicit-remote"), "rev-parse", "--abbrev-ref", "@{upstream}"), "origin/explicit-remote")
-	mustEqual(t, gitOutput(t, p, p.root, "-C", filepath.Join(p.root, "remote-branch"), "rev-parse", "--abbrev-ref", "@{upstream}"), "origin/remote-branch")
+	mustEqual(t, gitOutput(t, p, p.root, "-C", filepath.Join(p.root, ".worktrees", "explicit-remote"), "rev-parse", "--abbrev-ref", "@{upstream}"), "origin/explicit-remote")
+	mustEqual(t, gitOutput(t, p, p.root, "-C", filepath.Join(p.root, ".worktrees", "remote-branch"), "rev-parse", "--abbrev-ref", "@{upstream}"), "origin/remote-branch")
 
 	got := p.run("", "ls", "--porcelain", "--tmux")
 	mustSucceed(t, got)
-	mustContain(t, got.output, "feat/one\n"+mustRealPath(t, filepath.Join(p.root, "feat-one"))+"\nS-cave-feat/one\n")
+	mustContain(t, got.output, "feat/one\n"+mustRealPath(t, filepath.Join(p.root, ".worktrees", "feat-one"))+"\nS-cave-feat/one\n")
 	mustNotContain(t, got.output, "\x1b[")
 	got = p.run("", "ls", "--tmux")
 	mustSucceed(t, got)
@@ -304,8 +304,8 @@ session_backend = "tmux"
 		mustFail(t, got)
 	}
 
-	// Commands invoked from a nested worktree find the project config above it.
-	nested := filepath.Join(p.root, "main", "nested")
+	// Git metadata identifies the owning project from a linked subdirectory.
+	nested := filepath.Join(p.root, ".worktrees", "main", "nested")
 	mustMkdirAll(t, nested)
 	got = p.runAt(nested, "", "ls", "--porcelain", "--tmux")
 	mustSucceed(t, got)
@@ -328,16 +328,16 @@ func TestE2EHerdrAddPinsSourceToProjectRoot(t *testing.T) {
 		"HERDR_WORKSPACE_ID": "another-workspace",
 		"HERDR_PANE_ID":      "w-launch:p1",
 	})
-	nested := filepath.Join(p.root, "main", "nested")
+	nested := filepath.Join(p.root, ".worktrees", "main", "nested")
 	mustMkdirAll(t, nested)
 	mustSucceed(t, p.runAt(nested, "", "add", "test-worktree"))
 
 	root := mustRealPath(t, p.root)
 	log := mustReadFile(t, filepath.Join(p.fakeState, "herdr.log"))
-	mustContain(t, log, "|worktree open --cwd "+root+" --path "+filepath.Join(root, "test-worktree")+" --label test-worktree [project] --no-focus\n")
+	mustContain(t, log, "|worktree open --cwd "+root+" --path "+filepath.Join(root, ".worktrees", "test-worktree")+" --label test-worktree [project] --no-focus\n")
 	mustNotContain(t, log, "another-workspace")
 	mustContain(t, log, "|workspace focus w0\n")
-	mustEqual(t, mustReadFile(t, filepath.Join(p.root, "test-worktree", "setup.marker")), "setup")
+	mustEqual(t, mustReadFile(t, filepath.Join(p.root, ".worktrees", "test-worktree", "setup.marker")), "setup")
 }
 
 func TestE2EHerdrBadgeCreatesUpdatesAndPreservesLabel(t *testing.T) {
@@ -345,7 +345,7 @@ func TestE2EHerdrBadgeCreatesUpdatesAndPreservesLabel(t *testing.T) {
 setup = ["printf setup >> setup.marker"]
 `)
 	state := filepath.Join(p.fakeState, "herdr-workspaces")
-	dir := filepath.Join(p.root, "explicit-remote")
+	dir := filepath.Join(p.root, ".worktrees", "explicit-remote")
 
 	mustSucceed(t, p.run("", "add", "origin/explicit-remote", "rev"))
 	mustContain(t, mustReadFile(t, state), "[rev] explicit-remote [cave]")
@@ -389,7 +389,7 @@ func TestE2EHerdrBadgeUsesCustomTemplateAndLeavesTmuxUnchanged(t *testing.T) {
 	got := p.run("", "add", "feat/tmux", "rev", "--tmux")
 	mustFail(t, got)
 	mustContain(t, got.output, "workspace badges require the herdr backend")
-	if _, err := os.Stat(filepath.Join(p.root, "feat-tmux")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(p.root, ".worktrees", "feat-tmux")); !os.IsNotExist(err) {
 		t.Fatalf("rejected badge created a worktree: %v", err)
 	}
 	mustSucceed(t, p.run("", "add", "feat/tmux", "--tmux"))
@@ -407,7 +407,7 @@ func TestE2EAddResumesAfterSessionCreationFails(t *testing.T) {
 	mustFail(t, first)
 	mustContain(t, first.output, "creating herdr session failed")
 
-	dir := filepath.Join(p.root, "explicit-remote")
+	dir := filepath.Join(p.root, ".worktrees", "explicit-remote")
 	mustDir(t, dir)
 	mustEqual(t, mustReadFile(t, filepath.Join(dir, "setup.marker")), "setup")
 
@@ -424,7 +424,7 @@ func TestE2EAddResumesAfterSessionCreationFails(t *testing.T) {
 func TestE2EAddDoesNotRerunSetupForLegacyWorktree(t *testing.T) {
 	p := newE2EProject(t, `setup = ["printf setup > setup.marker"]
 `)
-	dir := filepath.Join(p.root, "explicit-remote")
+	dir := filepath.Join(p.root, ".worktrees", "explicit-remote")
 	testGit(t, p.root, "worktree", "add", dir, "explicit-remote")
 
 	got := p.run("", "add", "origin/explicit-remote")
@@ -438,7 +438,7 @@ func TestE2EAddDoesNotRerunSetupForLegacyWorktree(t *testing.T) {
 func TestE2EDeleteAcceptedTargetsAndTeardown(t *testing.T) {
 	p := newE2EProject(t, `name = "cave"
 setup = ["printf setup > setup.marker"]
-teardown = ["test -f setup.marker && printf teardown > ../teardown.marker"]
+teardown = ["test -f setup.marker && printf teardown > ../../teardown.marker"]
 `)
 	p.writeGlobal("session_template = \"S-{project}-{branch}\"\nsession_backend = \"tmux\"\n")
 
@@ -448,7 +448,7 @@ teardown = ["test -f setup.marker && printf teardown > ../teardown.marker"]
 			args = []string{"add", branch}
 		}
 		mustSucceed(t, p.run("", args...))
-		return filepath.Join(p.root, SanitizeBranch(branch))
+		return filepath.Join(p.root, ".worktrees", SanitizeBranch(branch))
 	}
 	one := add("feat/one")
 	remote := add("remote-branch")
@@ -509,10 +509,10 @@ func TestE2ECleanAndConfigurationFailures(t *testing.T) {
 
 	got := p.run("yes\n", "clean", "--tmux")
 	mustSucceed(t, got)
-	if _, err := os.Stat(filepath.Join(p.root, "merged")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(p.root, ".worktrees", "merged")); !os.IsNotExist(err) {
 		t.Fatalf("merged worktree was not deleted: %v", err)
 	}
-	mustDir(t, filepath.Join(p.root, "open"))
+	mustDir(t, filepath.Join(p.root, ".worktrees", "open"))
 	mustContain(t, got.output, "open: OPEN")
 	mustContain(t, mustReadFile(t, filepath.Join(p.fakeState, "gh.log")), "pr view --json state --jq .state")
 

@@ -12,7 +12,6 @@ const worktreesDirectory = ".worktrees"
 
 type repositoryContext struct {
 	Root         string
-	WorktreeRoot string
 	MainCheckout string // Empty for a bare repository.
 }
 
@@ -45,7 +44,7 @@ func resolveRepository(start string) (repositoryContext, error) {
 				root = parent
 			}
 		}
-		return repositoryContext{Root: root, WorktreeRoot: root}, nil
+		return repositoryContext{Root: root}, nil
 	}
 	out, err := gitAt(start, "--git-dir="+common, "worktree", "list", "--porcelain")
 	if err != nil {
@@ -57,10 +56,7 @@ func resolveRepository(start string) (repositoryContext, error) {
 	}
 	// Git always lists the main checkout first, even from a linked checkout.
 	root := entries[0].Dir
-	return repositoryContext{
-		Root: root, MainCheckout: root,
-		WorktreeRoot: filepath.Join(root, worktreesDirectory),
-	}, nil
+	return repositoryContext{Root: root, MainCheckout: root}, nil
 }
 
 // ensureWorktreesIgnored updates only the main checkout's ignore file and

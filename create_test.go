@@ -69,6 +69,48 @@ func TestNormalCloneAddPreservesExistingBranchPrecedence(t *testing.T) {
 	}
 }
 
+func TestCreateBadgeRenameFailureDoesNotAttachAndCanBeRetried(t *testing.T) {
+	p := newE2EProject(t, `setup = ["printf setup >> setup.marker"]`)
+	enterTestProject(t, p, p.root)
+	if err := runCreate("feat/review", "rev", backendHerdr); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(p.root, ".worktrees", "feat-review")
+	wantCommit := gitOutput(t, p, dir, "rev-parse", "HEAD")
+	logPath := filepath.Join(p.fakeState, "herdr.log")
+	workspaces := filepath.Join(p.fakeState, "herdr-workspaces")
+	failure := filepath.Join(p.fakeState, "herdr-rename-fail")
+	mustWriteFile(t, failure, "fail\n")
+	mustWriteFile(t, logPath, "")
+
+	err := runCreate("feat/review", "wip", backendHerdr)
+	if err == nil {
+		t.Fatal("workspace rename failure unexpectedly succeeded")
+	}
+	mustContain(t, err.Error(), "renaming herdr workspace failed")
+	log := mustReadFile(t, logPath)
+	mustNotContain(t, log, "workspace focus")
+	mustNotContain(t, log, "worktree open")
+	mustContain(t, mustReadFile(t, workspaces), "[rev] feat/review [project]")
+	mustEqual(t, mustReadFile(t, filepath.Join(dir, "setup.marker")), "setup")
+	mustEqual(t, gitOutput(t, p, dir, "rev-parse", "HEAD"), wantCommit)
+
+	if err := os.Remove(failure); err != nil {
+		t.Fatal(err)
+	}
+	mustWriteFile(t, logPath, "")
+	if err := runCreate("feat/review", "wip", backendHerdr); err != nil {
+		t.Fatal(err)
+	}
+	mustContain(t, mustReadFile(t, workspaces), "[wip] feat/review [project]")
+	mustNotContain(t, mustReadFile(t, workspaces), "[rev]")
+	log = mustReadFile(t, logPath)
+	mustContain(t, log, "workspace focus")
+	mustNotContain(t, log, "worktree open")
+	mustEqual(t, mustReadFile(t, filepath.Join(dir, "setup.marker")), "setup")
+	mustEqual(t, gitOutput(t, p, dir, "rev-parse", "HEAD"), wantCommit)
+}
+
 func TestNormalCloneAddRejectsUnbornCurrentBranch(t *testing.T) {
 	p := newTestProject(t, "", false)
 	testGit(t, p.root, "symbolic-ref", "HEAD", "refs/heads/unborn")

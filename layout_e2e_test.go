@@ -96,7 +96,46 @@ func TestE2EInitPromptFromLinkedCheckoutUsesOwningRoot(t *testing.T) {
 	}
 }
 
-func TestBareLayoutsStillCreateDirectChildren(t *testing.T) {
+func TestE2ERepositoryLayoutsShareWorktreeDestinationAndSetupPaths(t *testing.T) {
+	for _, bare := range []bool{true, false} {
+		name := "traditional"
+		if bare {
+			name = "bare"
+		}
+		t.Run(name, func(t *testing.T) {
+			p := newTestProject(t, `setup = ["ln -s ../../shared.txt shared.txt"]
+teardown = ["cat shared.txt > ../../teardown.marker"]
+`, bare)
+			mustWriteFile(t, filepath.Join(p.root, "shared.txt"), "project-owned shared file")
+			caller := p.root
+			if bare {
+				caller = filepath.Join(p.root, ".worktrees", "main")
+			}
+			nested := filepath.Join(caller, "src")
+			mustMkdirAll(t, nested)
+			mustSucceed(t, p.runAt(nested, "", "add", "feat/shared", "--tmux"))
+
+			dir := filepath.Join(p.root, ".worktrees", "feat-shared")
+			mustEqual(t, mustReadFile(t, filepath.Join(dir, "shared.txt")), "project-owned shared file")
+			target, err := os.Readlink(filepath.Join(dir, "shared.txt"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			mustEqual(t, target, "../../shared.txt")
+			nested = filepath.Join(dir, "src")
+			mustMkdirAll(t, nested)
+			mustSucceed(t, p.runAt(nested, "", "add", "feat/second", "--tmux"))
+			second := filepath.Join(p.root, ".worktrees", "feat-second")
+			mustEqual(t, mustReadFile(t, filepath.Join(second, "shared.txt")), "project-owned shared file")
+			mustSucceed(t, p.runAt(nested, "", "delete", ".worktrees/feat-second", "--tmux"))
+			mustSucceed(t, p.run("", "delete", "feat-shared", "--tmux"))
+			mustEqual(t, mustReadFile(t, filepath.Join(p.root, "teardown.marker")), "project-owned shared file")
+			mustEqual(t, mustReadFile(t, filepath.Join(p.root, "shared.txt")), "project-owned shared file")
+		})
+	}
+}
+
+func TestBareLayoutsCreateUnderWorktrees(t *testing.T) {
 	for _, legacy := range []bool{false, true} {
 		name := "wrapper"
 		if legacy {
@@ -117,7 +156,7 @@ func TestBareLayoutsStillCreateDirectChildren(t *testing.T) {
 			if err := runCreate("feat/bare", "", backendTmux); err != nil {
 				t.Fatal(err)
 			}
-			dir := filepath.Join(p.root, "feat-bare")
+			dir := filepath.Join(p.root, ".worktrees", "feat-bare")
 			mustDir(t, dir)
 			if _, err := os.Stat(filepath.Join(p.root, ".gitignore")); !os.IsNotExist(err) {
 				t.Fatalf("bare add changed .gitignore: %v", err)
@@ -129,16 +168,16 @@ func TestBareLayoutsStillCreateDirectChildren(t *testing.T) {
 			if err := runCreate("feat/second", "", backendTmux); err != nil {
 				t.Fatal(err)
 			}
-			mustDir(t, filepath.Join(p.root, "feat-second"))
-			mustEqual(t, gitOutput(t, p, filepath.Join(p.root, "feat-second"), "rev-parse", "HEAD"), gitOutput(t, p, p.root, "rev-parse", "origin/main"))
+			mustDir(t, filepath.Join(p.root, ".worktrees", "feat-second"))
+			mustEqual(t, gitOutput(t, p, filepath.Join(p.root, ".worktrees", "feat-second"), "rev-parse", "HEAD"), gitOutput(t, p, p.root, "rev-parse", "origin/main"))
 			if err := runCreate("release", "", backendTmux); err != nil {
 				t.Fatal(err)
 			}
-			mustEqual(t, gitOutput(t, p, filepath.Join(p.root, "release"), "rev-parse", "HEAD"), gitOutput(t, p, p.root, "rev-parse", "origin/release"))
+			mustEqual(t, gitOutput(t, p, filepath.Join(p.root, ".worktrees", "release"), "rev-parse", "HEAD"), gitOutput(t, p, p.root, "rev-parse", "origin/release"))
 			if err := runCreate("origin/explicit-remote", "", backendTmux); err != nil {
 				t.Fatal(err)
 			}
-			mustEqual(t, gitOutput(t, p, filepath.Join(p.root, "explicit-remote"), "rev-parse", "--abbrev-ref", "@{upstream}"), "origin/explicit-remote")
+			mustEqual(t, gitOutput(t, p, filepath.Join(p.root, ".worktrees", "explicit-remote"), "rev-parse", "--abbrev-ref", "@{upstream}"), "origin/explicit-remote")
 			if err := runDelete("feat-bare", backendTmux); err != nil {
 				t.Fatal(err)
 			}

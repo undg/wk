@@ -12,7 +12,7 @@ base_ref = "origin/main"     # optional; overrides global default_base_ref
 setup = [
   # e.g.:
   # "pnpm i --frozen-lockfile",
-  # Shared files at the project root: ../ for bare repos, ../../ for normal clones.
+  # Shared files at the project root: ../../ for all repository layouts.
   # "ln -s ../../AGENTS.md .",
 ]
 

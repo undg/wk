@@ -48,13 +48,13 @@ git clone --bare <remote-url> .bare
 echo "gitdir: ./.bare" > .git
 
 # optional: shared hooks across every worktree
-git --git-dir=.bare config core.hooksPath ../hooks
+git --git-dir=.bare config core.hooksPath "$PWD/hooks"
 
 # add the first worktree (usually main)
-git worktree add main main
+git worktree add .worktrees/main main
 ```
 
-At this point `~/Code/<project>/` contains `.bare/`, `.git` (the gitfile), `main/` (your first worktree), and nothing else. Any files you want symlinked into *every* worktree (shared env files, `AGENTS.md`, etc.) go here too, as siblings of `.bare/` — `wk`'s `setup` steps (below) `ln -s ../<file> .` them into new worktrees.
+At this point `~/Code/<project>/` contains `.bare/`, `.git` (the gitfile), and `.worktrees/main/` (your first worktree). Any files you want symlinked into *every* worktree (shared env files, `AGENTS.md`, etc.) go at the project root too, as siblings of `.bare/` — `wk`'s `setup` steps (below) `ln -s ../../<file> .` them into new worktrees. The optional hooks setting uses an absolute path because Git resolves relative hook paths from different directories for different hooks.
 
 Finish setup by adding `.wk.toml` (next section) and running `wk init` from this directory if you'd rather scaffold it than hand-write it.
 
@@ -80,7 +80,7 @@ project/
     feat-login/
 ```
 
-Git metadata determines the layout, including when invoked from a linked worktree or a subdirectory. Bare projects still create `<project-root>/<sanitized-branch>/`; normal clones create `<main-checkout>/.worktrees/<sanitized-branch>/`. No layout flag or configuration setting is required. Existing registered worktrees are not moved.
+Git metadata determines the owning project root, including when invoked from a linked worktree or a subdirectory. Both bare repositories and traditional clones create `<project-root>/.worktrees/<sanitized-branch>/`; for traditional clones, the project root is the main checkout. No layout flag or configuration setting is required. Existing registered worktrees are not moved. Bare projects do not need a project-root `.gitignore`.
 
 The main checkout remains visible in `wk ls`, but `wk delete` refuses to remove it and `wk clean` skips it, regardless of its branch name.
 
@@ -95,10 +95,9 @@ base_ref = "origin/main"         # optional; bare repos only, overrides default_
 
 setup = [                        # run in order, inside the new worktree, after `git worktree add`
   "pnpm i --frozen-lockfile",
-  "git config core.hooksPath ../hooks",
-  "ln -s ../AGENTS.md .",
-  "ln -s ../.env.custom .",
-  "ln -s ../.env.custom-local .",
+  "ln -s ../../AGENTS.md .",
+  "ln -s ../../.env.custom .",
+  "ln -s ../../.env.custom-local .",
 ]
 
 teardown = [                     # run in order, inside the worktree, before it's torn down
@@ -114,7 +113,7 @@ teardown = [                     # run in order, inside the worktree, before it'
 | `setup` | no | Shell steps run inside a freshly created worktree, in order, stopping at the first failure. |
 | `teardown` | no | Shell steps run inside a worktree right before it's deleted — for anything `git worktree remove` won't clean up on its own (stopping a docker stack, killing background processes, etc.). |
 
-The example above uses bare-layout paths. Setup and teardown always run inside the target worktree. To reach a shared file at the project root, use `../<file>` in a bare project and `../../<file>` in a traditional clone. `wk` does not rewrite your shell commands.
+Setup and teardown always run inside the target worktree. To reach a shared file at the project root, use `../../<file>` in either repository layout. `wk` does not rewrite your shell commands.
 
 ## 3. Global config
 

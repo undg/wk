@@ -8,9 +8,9 @@ import (
 func TestMergeProjectConfig(t *testing.T) {
 	progressEnabled, progressDisabled := true, false
 	traditional := repositoryContext{
-		Root: "/projects/checkout", WorktreeRoot: "/projects/checkout/.worktrees", MainCheckout: "/projects/checkout",
+		Root: "/projects/checkout", MainCheckout: "/projects/checkout",
 	}
-	bare := repositoryContext{Root: "/projects/wrapper", WorktreeRoot: "/projects/wrapper"}
+	bare := repositoryContext{Root: "/projects/wrapper"}
 
 	tests := []struct {
 		name       string

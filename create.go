@@ -46,7 +46,7 @@ func runCreate(rawBranchArg, badge, backendOverride string) error {
 	if slug == "" {
 		return fmt.Errorf("branch name became empty after sanitization")
 	}
-	worktreeDir := filepath.Join(cfg.Repository.WorktreeRoot, slug)
+	worktreeDir := filepath.Join(cfg.Repository.Root, worktreesDirectory, slug)
 	sess := session{
 		Name: sessionNameFromTemplate(cfg.SessionTemplate, rawBranch, cfg.ProjectName),
 		Dir:  worktreeDir,

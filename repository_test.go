@@ -15,9 +15,6 @@ func TestRepositoryLayoutFromRootAndLinkedCheckout(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			p := newTestProject(t, "", bare)
 			linked := filepath.Join(p.root, ".worktrees", "feature")
-			if bare {
-				linked = filepath.Join(p.root, "feature")
-			}
 			testGit(t, p.root, "worktree", "add", "-b", "feature", linked, "origin/main")
 			nested := filepath.Join(linked, "src")
 			mustMkdirAll(t, nested)
@@ -29,10 +26,8 @@ func TestRepositoryLayoutFromRootAndLinkedCheckout(t *testing.T) {
 				root := mustRealPath(t, p.root)
 				mustEqual(t, got.Root, root)
 				if bare {
-					mustEqual(t, got.WorktreeRoot, root)
 					mustEqual(t, got.MainCheckout, "")
 				} else {
-					mustEqual(t, got.WorktreeRoot, filepath.Join(root, ".worktrees"))
 					mustEqual(t, got.MainCheckout, root)
 				}
 			}
@@ -48,7 +43,6 @@ func TestRepositoryLayoutLegacyBareRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	mustEqual(t, got.Root, mustRealPath(t, root))
-	mustEqual(t, got.WorktreeRoot, mustRealPath(t, root))
 	mustEqual(t, got.MainCheckout, "")
 }
 
