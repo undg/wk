@@ -153,6 +153,8 @@ func TestBareLayoutsCreateUnderWorktrees(t *testing.T) {
 				}
 			}
 			enterTestProject(t, p, p.root)
+			exclude := gitOutput(t, p, p.root, "rev-parse", "--path-format=absolute", "--git-path", "info/exclude")
+			mustWriteFile(t, exclude, "# bare repository: leave this alone\n")
 			if err := runCreate("feat/bare", "", backendTmux); err != nil {
 				t.Fatal(err)
 			}
@@ -181,6 +183,7 @@ func TestBareLayoutsCreateUnderWorktrees(t *testing.T) {
 			if err := runDelete("feat-bare", backendTmux); err != nil {
 				t.Fatal(err)
 			}
+			mustEqual(t, mustReadFile(t, exclude), "# bare repository: leave this alone\n")
 		})
 	}
 }

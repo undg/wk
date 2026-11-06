@@ -33,7 +33,7 @@ func usage(w *os.File) {
 	fmt.Fprintf(w, "  version                  print the wk version\n\n")
 	fmt.Fprintf(w, "REPOSITORY LAYOUT\n")
 	fmt.Fprintf(w, "  all repositories        worktrees under <project-root>/.wk/\n")
-	fmt.Fprintf(w, "  traditional clone       adds /.wk/ to the main checkout's .gitignore\n")
+	fmt.Fprintf(w, "  traditional clone       adds /.wk/ to Git's local info/exclude\n")
 	fmt.Fprintf(w, "                           main checkout cannot be deleted or cleaned\n\n")
 	fmt.Fprintf(w, "SESSION BACKEND\n")
 	fmt.Fprintf(w, "  --herdr | --tmux         override the backend for this run (default: herdr)\n")

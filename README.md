@@ -26,7 +26,7 @@ wk init
 wk add feat/login
 ```
 
-WK adds `/.wk/` to the main checkout's `.gitignore`; commit that rule to share it. Creation stops if the ignore file cannot be updated or conflicting rules leave the container unignored. The main checkout appears in `wk ls` but cannot be deleted or cleaned.
+For traditional clones, wk adds `/.wk/` to Git's local `info/exclude` file without changing `.gitignore`. Creation stops if the exclude file cannot be updated or conflicting ignore rules leave the container unignored. Bare repositories, including `.bare/` layouts with a `.git` redirect file, need no ignore changes. The main checkout appears in `wk ls` but cannot be deleted or cleaned.
 
 ### Bare repository
 
