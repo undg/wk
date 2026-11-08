@@ -36,10 +36,9 @@ setup = ["printf setup >> setup.marker"]
 		t.Fatal(err)
 	}
 	mustEqual(t, mustReadFile(t, filepath.Join(dir, "setup.marker")), "setup")
-	mustEqual(t, mustReadFile(t, filepath.Join(root, ".gitignore")), "# keep this\n/.wk/\n")
+	mustEqual(t, mustReadFile(t, filepath.Join(root, ".gitignore")), "# keep this")
 	mustContain(t, mustReadFile(t, filepath.Join(p.fakeState, "herdr.log")), "|worktree open --cwd "+root+" --path "+dir+" --label [rev] feat/login [cave] --no-focus\n")
 	mustEqual(t, gitOutput(t, p, dir, "branch", "--show-current"), "feat/login")
-	testGit(t, root, "check-ignore", "-q", ".wk/")
 
 	if err := runCreate("remote-branch", "", backendTmux); err != nil {
 		t.Fatal(err)
@@ -168,27 +167,39 @@ func TestNormalCloneSetupFailureRetriesWithoutRepeatingCompletedSetup(t *testing
 	mustEqual(t, mustReadFile(t, filepath.Join(p.fakeState, "tmux-sessions")), "retry [project]\n")
 }
 
-func TestNormalCloneIgnoreFailureDoesNotCreateBranchOrWorktree(t *testing.T) {
+func TestNormalCloneCreateLeavesGitignoreAlone(t *testing.T) {
 	p := newTestProject(t, "", false)
 	enterTestProject(t, p, p.root)
 	path := filepath.Join(p.root, ".gitignore")
-	mustMkdirAll(t, path)
-	if err := runCreate("failure", "", backendTmux); err == nil {
-		t.Fatal("created worktree despite unreadable ignore file")
-	}
-	if err := os.Remove(path); err != nil {
+	reader, writer, err := os.Pipe()
+	if err != nil {
 		t.Fatal(err)
 	}
-	mustWriteFile(t, path, "/.wk/\n!/.wk/\n")
-	if err := runCreate("failure", "", backendTmux); err == nil {
-		t.Fatal("created worktree despite conflicting ignore rule")
+	defer reader.Close()
+	defer writer.Close()
+	stderr := os.Stderr
+	os.Stderr = writer
+	err = runCreate("missing-ignore", "", backendTmux)
+	os.Stderr = stderr
+	writer.Close()
+	if err != nil {
+		t.Fatal(err)
 	}
-	if branchExists("failure") {
-		t.Fatal("created branch before ensuring ignore rule")
+	output, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(p.root, ".wk")); !os.IsNotExist(err) {
-		t.Fatalf("created container despite ignore failure: %v", err)
+	mustContain(t, string(output), ".wk/ is not ignored")
+	mustContain(t, string(output), ".gitignore")
+	mustContain(t, string(output), ".git/info/exclude")
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("created .gitignore: %v", err)
 	}
+	mustWriteFile(t, path, "# keep this\n!/.wk/\n")
+	if err := runCreate("conflicting-ignore", "", backendTmux); err != nil {
+		t.Fatal(err)
+	}
+	mustEqual(t, mustReadFile(t, path), "# keep this\n!/.wk/\n")
 }
 
 func TestNormalCloneListShowsMainAndNestedPaths(t *testing.T) {

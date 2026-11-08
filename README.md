@@ -26,7 +26,7 @@ wk init
 wk add feat/login
 ```
 
-WK adds `/.wk/` to the main checkout's `.gitignore`; commit that rule to share it. Creation stops if the ignore file cannot be updated or conflicting rules leave the container unignored. The main checkout appears in `wk ls` but cannot be deleted or cleaned.
+The main checkout appears in `wk ls` but cannot be deleted or cleaned. If `.wk/` is not ignored, `wk add` warns without editing ignore rules; add `/.wk/` to the tracked `.gitignore` to share the rule, or to `.git/info/exclude` to keep it local.
 
 ### Bare repository
 
@@ -39,7 +39,7 @@ wk init
 wk add main
 ```
 
-Shared files such as `AGENTS.md` and local env files belong at the project root, alongside `.bare/` and `.wk.toml`. Bare projects do not need a project-root `.gitignore`.
+Shared files such as `AGENTS.md` and local env files belong at the project root, alongside `.bare/` and `.wk.toml`.
 
 Both flows create `<project-root>/.wk/<sanitized-branch>/`, such as `.wk/feat-login/`. Existing worktrees are not moved. Commands work from the project root, linked worktrees, or their subdirectories; Git metadata identifies the owning project.
 

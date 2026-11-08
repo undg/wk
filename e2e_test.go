@@ -120,6 +120,7 @@ func newTestProject(t *testing.T, repoConfig string, bare bool) *e2eProject {
 	p.env = setEnv(os.Environ(), map[string]string{
 		"HOME":                p.home,
 		"XDG_CONFIG_HOME":     filepath.Join(p.home, ".config"),
+		"GIT_CONFIG_GLOBAL":   os.DevNull,
 		"GIT_CONFIG_NOSYSTEM": "1",
 		"GIT_TERMINAL_PROMPT": "0",
 		"PATH":                fakeBin + string(os.PathListSeparator) + os.Getenv("PATH"),
@@ -656,7 +657,11 @@ func testGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
-	cmd.Env = setEnv(os.Environ(), map[string]string{"GIT_CONFIG_NOSYSTEM": "1", "GIT_TERMINAL_PROMPT": "0"})
+	cmd.Env = setEnv(os.Environ(), map[string]string{
+		"GIT_CONFIG_GLOBAL":   os.DevNull,
+		"GIT_CONFIG_NOSYSTEM": "1",
+		"GIT_TERMINAL_PROMPT": "0",
+	})
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("git %s failed in %s: %v\n%s", strings.Join(args, " "), dir, err, out)

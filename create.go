@@ -78,11 +78,8 @@ func runCreate(rawBranchArg, badge, backendOverride string) error {
 		logInfo("resuming existing worktree: %s", worktreeDir)
 	} else {
 		if cfg.Repository.MainCheckout != "" {
-			if err := ensureWorktreesIgnored(cfg.Repository.Root); err != nil {
-				return err
-			}
-			if _, err := runGit("check-ignore", "--quiet", "--", worktreesDirectory+"/"); err != nil {
-				return fmt.Errorf("%s/ is not ignored; check conflicting .gitignore rules", worktreesDirectory)
+			if hint := worktreesIgnoreHint(cfg.Repository.MainCheckout); hint != "" {
+				logWarn("%s", hint)
 			}
 		}
 		logStep("creating worktree")

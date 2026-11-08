@@ -59,26 +59,12 @@ func resolveRepository(start string) (repositoryContext, error) {
 	return repositoryContext{Root: root, MainCheckout: root}, nil
 }
 
-// ensureWorktreesIgnored updates only the main checkout's ignore file and
-// preserves existing content. Creation also checks that Git honors the rule.
-func ensureWorktreesIgnored(root string) error {
-	path := filepath.Join(root, ".gitignore")
-	data, err := os.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("reading %s: %w", path, err)
+// worktreesIgnoreHint reports how to keep the container out of Git's view, or
+// an empty string when an ignore rule already covers it. Ignore rules are
+// user-owned, so wk warns instead of editing them.
+func worktreesIgnoreHint(mainCheckout string) string {
+	if _, err := gitAt(mainCheckout, "check-ignore", "--quiet", "--", worktreesDirectory+"/"); err == nil {
+		return ""
 	}
-	const entry = "/.wk/"
-	for _, line := range strings.Split(string(data), "\n") {
-		if strings.TrimSuffix(line, "\r") == entry {
-			return nil
-		}
-	}
-	if len(data) > 0 && data[len(data)-1] != '\n' {
-		data = append(data, '\n')
-	}
-	data = append(data, []byte(entry+"\n")...)
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return fmt.Errorf("ignoring worktree directory: %w", err)
-	}
-	return nil
+	return fmt.Sprintf("%s/ is not ignored; add /%s/ to the main checkout's .gitignore or .git/info/exclude so Git cannot stage or clean worktrees", worktreesDirectory, worktreesDirectory)
 }
