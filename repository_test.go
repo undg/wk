@@ -52,12 +52,12 @@ func TestRepositoryLayoutOutsideGitFails(t *testing.T) {
 	}
 }
 
-func TestExcludeWorktreesPreservesContentAndIsIdempotent(t *testing.T) {
+func TestIgnoreWorktreesPreservesContentAndIsIdempotent(t *testing.T) {
 	for _, c := range []struct {
 		name, before, want string
 	}{
-		{"missing info directory", "", "/.wk/\n"},
-		{"no newline", "local-only", "local-only\n/.wk/\n"},
+		{"missing", "", "/.wk/\n"},
+		{"no newline", "node_modules/", "node_modules/\n/.wk/\n"},
 		{"newline", "# keep me\n", "# keep me\n/.wk/\n"},
 		{"existing", "/.wk/\nother\n", "/.wk/\nother\n"},
 		{"CRLF", "# keep me\r\n/.wk/\r\n", "# keep me\r\n/.wk/\r\n"},
@@ -65,36 +65,46 @@ func TestExcludeWorktreesPreservesContentAndIsIdempotent(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			root := t.TempDir()
 			testGit(t, root, "init", ".")
-			path := filepath.Join(root, ".git", "info", "exclude")
-			if c.before == "" {
-				if err := os.RemoveAll(filepath.Dir(path)); err != nil {
-					t.Fatal(err)
-				}
-			} else {
+			path := filepath.Join(root, ".gitignore")
+			if c.before != "" {
 				mustWriteFile(t, path, c.before)
-				if err := os.Chmod(path, 0o600); err != nil {
-					t.Fatal(err)
-				}
 			}
 			for i := 0; i < 2; i++ {
-				if err := ensureWorktreesExcluded(root); err != nil {
+				if err := ensureWorktreesIgnored(root); err != nil {
 					t.Fatal(err)
 				}
 				mustEqual(t, mustReadFile(t, path), c.want)
 			}
 			testGit(t, root, "check-ignore", "-q", ".wk/feature/README")
-			if c.before != "" {
-				info, err := os.Stat(path)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if info.Mode().Perm() != 0o600 {
-					t.Fatalf("changed exclude permissions: %v", info.Mode())
-				}
-			}
-			if _, err := os.Stat(filepath.Join(root, ".gitignore")); !os.IsNotExist(err) {
-				t.Fatalf("created .gitignore: %v", err)
-			}
 		})
+	}
+}
+
+func TestIgnoreWorktreesReportsReadAndWriteErrors(t *testing.T) {
+	root := t.TempDir()
+	mustMkdirAll(t, filepath.Join(root, ".gitignore"))
+	if err := ensureWorktreesIgnored(root); err == nil {
+		t.Fatal("accepted a directory as .gitignore")
+	}
+	if err := ensureWorktreesIgnored(filepath.Join(root, "missing")); err == nil {
+		t.Fatal("ignored failure to write .gitignore")
+	}
+	// Reading an existing file must preserve its permissions.
+	path := filepath.Join(root, "other")
+	mustMkdirAll(t, path)
+	ignore := filepath.Join(path, ".gitignore")
+	mustWriteFile(t, ignore, "keep\n")
+	if err := os.Chmod(ignore, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := ensureWorktreesIgnored(path); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(ignore)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("changed existing .gitignore permissions: %v", info.Mode())
 	}
 }

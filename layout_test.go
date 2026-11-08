@@ -14,6 +14,7 @@ setup = ["printf setup >> setup.marker"]
 `, false)
 	enterTestProject(t, p, p.root)
 	root := mustRealPath(t, p.root)
+	mustWriteFile(t, filepath.Join(p.root, ".gitignore"), "# keep this")
 
 	// Failed backend creation keeps the worktree and completed setup ready.
 	failure := filepath.Join(p.fakeState, "herdr-open-fail")
@@ -35,8 +36,10 @@ setup = ["printf setup >> setup.marker"]
 		t.Fatal(err)
 	}
 	mustEqual(t, mustReadFile(t, filepath.Join(dir, "setup.marker")), "setup")
+	mustEqual(t, mustReadFile(t, filepath.Join(root, ".gitignore")), "# keep this\n/.wk/\n")
 	mustContain(t, mustReadFile(t, filepath.Join(p.fakeState, "herdr.log")), "|worktree open --cwd "+root+" --path "+dir+" --label [rev] feat/login [cave] --no-focus\n")
 	mustEqual(t, gitOutput(t, p, dir, "branch", "--show-current"), "feat/login")
+	testGit(t, root, "check-ignore", "-q", ".wk/")
 
 	if err := runCreate("remote-branch", "", backendTmux); err != nil {
 		t.Fatal(err)
@@ -165,63 +168,26 @@ func TestNormalCloneSetupFailureRetriesWithoutRepeatingCompletedSetup(t *testing
 	mustEqual(t, mustReadFile(t, filepath.Join(p.fakeState, "tmux-sessions")), "retry [project]\n")
 }
 
-func TestNormalCloneExcludesWorktreesFromLinkedCheckout(t *testing.T) {
+func TestNormalCloneIgnoreFailureDoesNotCreateBranchOrWorktree(t *testing.T) {
 	p := newTestProject(t, "", false)
-	ignore := filepath.Join(p.root, ".gitignore")
-	mustWriteFile(t, ignore, "# leave this alone\n")
-	exclude := filepath.Join(p.root, ".git", "info", "exclude")
-	mustWriteFile(t, exclude, "local-only")
-	linked := filepath.Join(p.root, ".wk", "source")
-	testGit(t, p.root, "worktree", "add", "-b", "source", linked)
-	nested := filepath.Join(linked, "src")
-	mustMkdirAll(t, nested)
-	enterTestProject(t, p, nested)
-	for _, branch := range []string{"first", "second", "second"} {
-		if err := runCreate(branch, "", backendTmux); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.Chdir(nested); err != nil {
-			t.Fatal(err)
-		}
+	enterTestProject(t, p, p.root)
+	path := filepath.Join(p.root, ".gitignore")
+	mustMkdirAll(t, path)
+	if err := runCreate("failure", "", backendTmux); err == nil {
+		t.Fatal("created worktree despite unreadable ignore file")
 	}
-	mustEqual(t, mustReadFile(t, exclude), "local-only\n/.wk/\n")
-	mustEqual(t, mustReadFile(t, ignore), "# leave this alone\n")
-	testGit(t, p.root, "check-ignore", "-q", ".wk/")
-}
-
-func TestNormalCloneExcludeFailureDoesNotCreateBranchOrWorktree(t *testing.T) {
-	for _, failure := range []string{"unreadable exclude", "unwritable info", "conflicting gitignore", "conflicting exclude"} {
-		t.Run(failure, func(t *testing.T) {
-			p := newTestProject(t, "", false)
-			enterTestProject(t, p, p.root)
-			info := filepath.Join(p.root, ".git", "info")
-			exclude := filepath.Join(info, "exclude")
-			switch failure {
-			case "unreadable exclude":
-				if err := os.Remove(exclude); err != nil {
-					t.Fatal(err)
-				}
-				mustMkdirAll(t, exclude)
-			case "unwritable info":
-				if err := os.RemoveAll(info); err != nil {
-					t.Fatal(err)
-				}
-				mustWriteFile(t, info, "not a directory")
-			case "conflicting gitignore":
-				mustWriteFile(t, filepath.Join(p.root, ".gitignore"), "!/.wk/\n")
-			case "conflicting exclude":
-				mustWriteFile(t, exclude, "/.wk/\n!/.wk/\n")
-			}
-			if err := runCreate("failure", "", backendTmux); err == nil {
-				t.Fatal("created worktree despite exclude failure")
-			}
-			if branchExists("failure") {
-				t.Fatal("created branch before ensuring exclude rule")
-			}
-			if _, err := os.Stat(filepath.Join(p.root, ".wk")); !os.IsNotExist(err) {
-				t.Fatalf("created container despite exclude failure: %v", err)
-			}
-		})
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	mustWriteFile(t, path, "/.wk/\n!/.wk/\n")
+	if err := runCreate("failure", "", backendTmux); err == nil {
+		t.Fatal("created worktree despite conflicting ignore rule")
+	}
+	if branchExists("failure") {
+		t.Fatal("created branch before ensuring ignore rule")
+	}
+	if _, err := os.Stat(filepath.Join(p.root, ".wk")); !os.IsNotExist(err) {
+		t.Fatalf("created container despite ignore failure: %v", err)
 	}
 }
 
