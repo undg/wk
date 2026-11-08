@@ -8,7 +8,7 @@ import (
 
 func enterTestProject(t *testing.T, p *e2eProject, dir string) {
 	t.Helper()
-	for _, key := range []string{"HOME", "XDG_CONFIG_HOME", "PATH", "WK_FAKE_STATE", "HERDR_ENV", "HERDR_PANE_ID", "HERDR_BIN_PATH", "HERDR_SOCKET_PATH", "GIT_CONFIG_NOSYSTEM", "GIT_TERMINAL_PROMPT"} {
+	for _, key := range []string{"HOME", "XDG_CONFIG_HOME", "PATH", "WK_FAKE_STATE", "HERDR_ENV", "HERDR_PANE_ID", "HERDR_BIN_PATH", "HERDR_SOCKET_PATH", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM", "GIT_TERMINAL_PROMPT"} {
 		for _, kv := range p.env {
 			if len(kv) > len(key) && kv[:len(key)+1] == key+"=" {
 				t.Setenv(key, kv[len(key)+1:])
