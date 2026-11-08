@@ -58,3 +58,13 @@ func resolveRepository(start string) (repositoryContext, error) {
 	root := entries[0].Dir
 	return repositoryContext{Root: root, MainCheckout: root}, nil
 }
+
+// worktreesIgnoreHint reports how to keep the container out of Git's view, or
+// an empty string when an ignore rule already covers it. Ignore rules are
+// user-owned, so wk warns instead of editing them.
+func worktreesIgnoreHint(mainCheckout string) string {
+	if _, err := gitAt(mainCheckout, "check-ignore", "--quiet", "--", worktreesDirectory+"/"); err == nil {
+		return ""
+	}
+	return fmt.Sprintf("%s/ is not ignored; add /%s/ to the main checkout's .gitignore or .git/info/exclude so Git cannot stage or clean worktrees", worktreesDirectory, worktreesDirectory)
+}

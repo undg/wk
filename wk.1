@@ -1,4 +1,4 @@
-.TH WK 1 "2026-11-07" "wk" "User Commands"
+.TH WK 1 "2026-11-08" "wk" "User Commands"
 .SH NAME
 wk \- manage Git worktrees and their development sessions
 .SH SYNOPSIS
@@ -135,6 +135,16 @@ Use the tmux session backend for this invocation.
 Equivalent to the matching short backend option.  Backend options may appear
 before or after the command; if more than one is supplied, the last one wins.
 .SH LAYOUT AND SETUP
+In a traditional clone, wk warns when the worktree container is not ignored.
+Ignore rules stay user-owned: add
+.B /.wk/
+to the tracked
+.I .gitignore
+to share the rule, or to Git's local
+.I info/exclude
+to keep it untracked.  wk never edits these files.  Bare repositories need no
+ignore rule.
+.PP
 Setup and teardown commands run inside the target worktree.  Relative paths
 to shared files at the project root therefore use
 .I ../../

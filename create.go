@@ -77,6 +77,11 @@ func runCreate(rawBranchArg, badge, backendOverride string) error {
 	if reusingWorktree {
 		logInfo("resuming existing worktree: %s", worktreeDir)
 	} else {
+		if cfg.Repository.MainCheckout != "" {
+			if hint := worktreesIgnoreHint(cfg.Repository.MainCheckout); hint != "" {
+				logWarn("%s", hint)
+			}
+		}
 		logStep("creating worktree")
 		if branchExists(rawBranch) {
 			logInfo("branch already exists, reusing: %s", rawBranch)

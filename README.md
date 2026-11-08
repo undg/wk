@@ -26,7 +26,7 @@ wk init
 wk add feat/login
 ```
 
-The main checkout appears in `wk ls` but cannot be deleted or cleaned.
+The main checkout appears in `wk ls` but cannot be deleted or cleaned. If `.wk/` is not ignored, `wk add` warns without editing ignore rules; add `/.wk/` to the tracked `.gitignore` to share the rule, or to `.git/info/exclude` to keep it local.
 
 ### Bare repository
 

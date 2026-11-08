@@ -50,3 +50,28 @@ func TestRepositoryLayoutOutsideGitFails(t *testing.T) {
 		t.Fatal("accepted a directory outside Git")
 	}
 }
+
+func TestWorktreesIgnoreHint(t *testing.T) {
+	for _, c := range []struct {
+		name, file, content string
+	}{
+		{"unignored", "", ""},
+		{"gitignore", ".gitignore", "/.wk/\n"},
+		{"info exclude", ".git/info/exclude", "/.wk/\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			root := t.TempDir()
+			testGit(t, root, "init", ".")
+			if c.file != "" {
+				mustWriteFile(t, filepath.Join(root, c.file), c.content)
+			}
+			hint := worktreesIgnoreHint(root)
+			if c.file != "" {
+				mustEqual(t, hint, "")
+				return
+			}
+			mustContain(t, hint, ".gitignore")
+			mustContain(t, hint, ".git/info/exclude")
+		})
+	}
+}

@@ -34,6 +34,10 @@ func logOK(format string, a ...any) {
 	fmt.Printf("%s[wk]%s %s\n", colorGreen, colorReset, highlightDelete(fmt.Sprintf(format, a...)))
 }
 
+func logWarn(format string, a ...any) {
+	fmt.Fprintf(os.Stderr, "%sWarning:%s %s\n", colorYellow, colorReset, highlightDelete(fmt.Sprintf(format, a...)))
+}
+
 func logError(format string, a ...any) {
 	fmt.Fprintf(os.Stderr, "%sError:%s %s\n", colorRed, colorReset, highlightDelete(fmt.Sprintf(format, a...)))
 }

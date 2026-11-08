@@ -171,9 +171,27 @@ func TestNormalCloneCreateLeavesGitignoreAlone(t *testing.T) {
 	p := newTestProject(t, "", false)
 	enterTestProject(t, p, p.root)
 	path := filepath.Join(p.root, ".gitignore")
-	if err := runCreate("missing-ignore", "", backendTmux); err != nil {
+	reader, writer, err := os.Pipe()
+	if err != nil {
 		t.Fatal(err)
 	}
+	defer reader.Close()
+	defer writer.Close()
+	stderr := os.Stderr
+	os.Stderr = writer
+	err = runCreate("missing-ignore", "", backendTmux)
+	os.Stderr = stderr
+	writer.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	output, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustContain(t, string(output), ".wk/ is not ignored")
+	mustContain(t, string(output), ".gitignore")
+	mustContain(t, string(output), ".git/info/exclude")
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("created .gitignore: %v", err)
 	}
