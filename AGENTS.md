@@ -19,6 +19,7 @@
 - `herdr.go`, `tmux.go`: backend-specific session handling.
 - `config.go`: project/global configuration and project-root discovery.
 - `README.md`: installation, configuration, workflow, and known limitations.
+- `scripts/bump`: create the next annotated semver release tag.
 - `wk.1`: command-line manual. Update it when documented behavior changes; update its `.TH` date for substantive manual changes.
 
 ## Build and verification

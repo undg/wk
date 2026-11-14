@@ -30,6 +30,21 @@ install: build
 install-local:
 	$(MAKE) install PREFIX="$(HOME)/.local"
 
+## bump-patch: tag the next patch release
+.PHONY: bump-patch
+bump-patch:
+	scripts/bump patch
+
+## bump-minor: tag the next minor release
+.PHONY: bump-minor
+bump-minor:
+	scripts/bump minor
+
+## bump-major: tag the next major release
+.PHONY: bump-major
+bump-major:
+	scripts/bump major
+
 ## uninstall: remove wk and its man page (use the same PREFIX and DESTDIR as install)
 .PHONY: uninstall
 uninstall:

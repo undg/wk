@@ -14,6 +14,11 @@ man wk
 
 Uninstall with `make uninstall` using the same prefix and permissions. Package staging supports `DESTDIR` alongside `PREFIX`.
 
+Release tags use `MAJOR.MINOR.PATCH`. `make bump-patch`, `make bump-minor`, and
+`make bump-major` create the next annotated tag from the latest merged semver
+tag, starting at `0.0.0` when none exists. They require a clean tracked tree and
+do not push; publish with `git push --follow-tags`.
+
 ## Get started
 
 ### Traditional clone
