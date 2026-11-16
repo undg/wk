@@ -114,6 +114,8 @@ wk delete .                 # remove the caller's worktree; also works from subd
 wk clean                    # offer to delete worktrees with merged PRs
 ```
 
+Use `wk <command> --help` (or `wk help <command>`) for command-specific arguments and flags.
+
 `wk add <name>` reuses a local branch first, then checks for `origin/<name>`. Otherwise it creates a new branch from the caller's current `HEAD` in a traditional clone, or from `base_ref` in a bare repository. Only committed changes are included. For new bare-repository branches, check `git branch -vv` before assuming upstream tracking; it depends on Git configuration. Explicit origin checkouts set their upstream.
 
 An optional badge changes only the Herdr label, not branch names or paths. A new badge replaces the label; omitting it preserves an existing label. Supply the badge again when recreating a closed workspace. Tmux does not support badges.
@@ -134,7 +136,9 @@ See [backend details](docs/session-backends.md) for command mapping, progress re
 
 ### Shell completion
 
-`wk completion <zsh|bash|fish>` prints a completion script. Add completion suggests remote branches; delete completion suggests registered worktree paths.
+`wk completion <zsh|bash|fish>` prints a Cobra-generated completion script for commands, flags, and arguments. Add completion suggests local branches and origin branches, including explicit `origin/` names. Delete/rm completion suggests registered worktree paths, branches, and `.`. Backend flag completion suggests `herdr` or `tmux`.
+
+Dynamic completion reads Git directly without loading project configuration, prompting, or contacting session backends. Regenerate any saved completion scripts after upgrading from the hand-written completions.
 
 For zsh, save the script in a directory already in your `fpath`, before `compinit` runs:
 

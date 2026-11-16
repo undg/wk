@@ -1,163 +1,95 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"sort"
+	"strings"
 
-func usageCompletion() {
-	fmt.Println("usage: wk completion <zsh|bash|fish>")
-}
+	"github.com/spf13/cobra"
+)
 
-func runCompletion(args []string) error {
-	if len(args) != 1 {
-		usageCompletion()
-		return fmt.Errorf("expected exactly one shell argument")
+func newCompletionCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:                   "completion <zsh|bash|fish>",
+		Short:                 "Generate a shell completion script",
+		Args:                  cobra.ExactArgs(1),
+		DisableFlagsInUseLine: true,
+		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			if len(args) != 0 {
+				return nil, cobra.ShellCompDirectiveNoFileComp
+			}
+			return matchingCompletions([]string{"zsh", "bash", "fish"}, toComplete), cobra.ShellCompDirectiveNoFileComp
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			root, out := cmd.Root(), cmd.OutOrStdout()
+			switch args[0] {
+			case "zsh":
+				return root.GenZshCompletion(out)
+			case "bash":
+				return root.GenBashCompletionV2(out, true)
+			case "fish":
+				return root.GenFishCompletion(out, true)
+			default:
+				return fmt.Errorf("unknown shell: %s", args[0])
+			}
+		},
 	}
+}
 
-	switch args[0] {
-	case "zsh":
-		fmt.Print(zshCompletionScript)
-	case "bash":
-		fmt.Print(bashCompletionScript)
-	case "fish":
-		fmt.Print(fishCompletionScript)
-	default:
-		usageCompletion()
-		return fmt.Errorf("unknown shell: %s", args[0])
+// Completion reads Git directly: loading project config can prompt, change cwd,
+// or scaffold .wk.toml, and session discovery is unnecessary for suggestions.
+func completeBranches(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	if len(args) != 0 {
+		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	return nil
+	out, err := runGit("for-each-ref", "--format=%(refname)\t%(symref)", "refs/heads/", "refs/remotes/origin/")
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	var candidates []string
+	for _, line := range strings.Split(out, "\n") {
+		ref, symref, _ := strings.Cut(line, "\t")
+		if symref != "" {
+			continue
+		}
+		switch {
+		case strings.HasPrefix(ref, "refs/heads/"):
+			candidates = append(candidates, strings.TrimPrefix(ref, "refs/heads/"))
+		case strings.HasPrefix(ref, "refs/remotes/origin/"):
+			branch := strings.TrimPrefix(ref, "refs/remotes/origin/")
+			candidates = append(candidates, branch, "origin/"+branch)
+		}
+	}
+	return matchingCompletions(candidates, toComplete), cobra.ShellCompDirectiveNoFileComp
 }
 
-// zshCompletionScript is a standalone #compdef function. It shells out to
-// `wk ls --porcelain` for dynamic worktree-dir completion so it never drifts
-// from the actual listing logic, and degrades to no completions (rather than
-// erroring) when run outside a wk project.
-const zshCompletionScript = `#compdef wk
-
-_wk() {
-  local -a subcommands
-  subcommands=(
-    'add:create a worktree + branch off base_ref'
-    'delete:remove a worktree, its branch, and prune'
-    'rm:alias for delete'
-    'clean:delete worktrees whose branch PR has merged'
-    'ls:show worktrees + session status'
-    'init:scaffold a starter .wk.toml'
-    'completion:generate shell completion scripts'
-    '--herdr:use the herdr session backend for this run'
-    '--tmux:use the tmux session backend for this run'
-    '--backend:session backend for this run (herdr or tmux)'
-    '-h:show usage'
-    '--help:show usage'
-  )
-
-  if (( CURRENT == 2 )); then
-    _describe -t commands 'wk command' subcommands
-    return
-  fi
-
-  case ${words[2]} in
-    --backend)
-      local -a backends
-      backends=(herdr tmux)
-      _describe -t backends 'session backend' backends
-      ;;
-    add)
-      _wk_branches
-      ;;
-    delete|rm)
-      _wk_worktree_dirs
-      ;;
-    ls)
-      _arguments '--porcelain[machine-readable output]'
-      ;;
-    completion)
-      local -a shells
-      shells=(zsh bash fish)
-      _describe -t shells 'shell' shells
-      ;;
-  esac
+func completeWorktrees(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	if len(args) != 0 {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	entries, err := listWorktrees()
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	candidates := []string{"."}
+	for _, wt := range entries {
+		candidates = append(candidates, wt.Dir)
+		if wt.Branch != "" {
+			candidates = append(candidates, wt.Branch)
+		}
+	}
+	return matchingCompletions(candidates, toComplete), cobra.ShellCompDirectiveNoFileComp
 }
 
-_wk_worktree_dirs() {
-  local -a lines dirs
-  lines=(${(f)"$(wk ls --porcelain 2>/dev/null)"})
-  # porcelain is 3-line blocks (branch, dir, session) separated by a blank line.
-  local i
-  for (( i = 2; i <= $#lines; i += 4 )); do
-    dirs+=("${lines[i]}")
-  done
-  _describe -t worktrees 'worktree directory' dirs
+func matchingCompletions(candidates []string, prefix string) []string {
+	seen := make(map[string]bool)
+	var matches []string
+	for _, candidate := range candidates {
+		if strings.HasPrefix(candidate, prefix) && !seen[candidate] {
+			seen[candidate] = true
+			matches = append(matches, candidate)
+		}
+	}
+	sort.Strings(matches)
+	return matches
 }
-
-_wk_branches() {
-  local -a branches
-  branches=(${(f)"$(git branch -r --format='%(refname:short)' 2>/dev/null | sed 's#^origin/##')"})
-  _describe -t branches 'branch' branches
-}
-
-compdef _wk wk
-`
-
-const bashCompletionScript = `_wk_completions() {
-  local cur prev
-  cur="${COMP_WORDS[COMP_CWORD]}"
-  prev="${COMP_WORDS[COMP_CWORD-1]}"
-
-  if [[ $COMP_CWORD -eq 1 ]]; then
-    COMPREPLY=($(compgen -W "add delete rm clean ls init completion --herdr --tmux --backend -h --help" -- "$cur"))
-    return
-  fi
-
-  if [[ "$prev" == "--backend" ]]; then
-    COMPREPLY=($(compgen -W "herdr tmux" -- "$cur"))
-    return
-  fi
-
-  case "${COMP_WORDS[1]}" in
-    delete|rm)
-      local dirs
-      dirs=$(wk ls --porcelain 2>/dev/null | awk 'NR % 4 == 2')
-      COMPREPLY=($(compgen -W "$dirs" -- "$cur"))
-      ;;
-    add)
-      local branches
-      branches=$(git branch -r --format='%(refname:short)' 2>/dev/null | sed 's#^origin/##')
-      COMPREPLY=($(compgen -W "$branches" -- "$cur"))
-      ;;
-    ls)
-      COMPREPLY=($(compgen -W "--porcelain" -- "$cur"))
-      ;;
-    completion)
-      COMPREPLY=($(compgen -W "zsh bash fish" -- "$cur"))
-      ;;
-  esac
-}
-complete -F _wk_completions wk
-`
-
-const fishCompletionScript = `function __wk_worktree_dirs
-    wk ls --porcelain 2>/dev/null | awk 'NR % 4 == 2'
-end
-
-function __wk_branches
-    git branch -r --format='%(refname:short)' 2>/dev/null | sed 's#^origin/##'
-end
-
-complete -c wk -f
-complete -c wk -n '__fish_use_subcommand' -a add -d 'create a worktree + branch off base_ref'
-complete -c wk -n '__fish_use_subcommand' -a delete -d 'remove a worktree, its branch, and prune'
-complete -c wk -n '__fish_use_subcommand' -a rm -d 'alias for delete'
-complete -c wk -n '__fish_use_subcommand' -a clean -d 'delete worktrees whose branch PR has merged'
-complete -c wk -n '__fish_use_subcommand' -a ls -d 'show worktrees + session status'
-complete -c wk -n '__fish_use_subcommand' -a init -d 'scaffold a starter .wk.toml'
-complete -c wk -n '__fish_use_subcommand' -a completion -d 'generate shell completion scripts'
-complete -c wk -n '__fish_use_subcommand' -s h -l help -d 'show usage'
-
-complete -c wk -n '__fish_seen_subcommand_from add' -a '(__wk_branches)'
-complete -c wk -n '__fish_seen_subcommand_from delete rm' -a '(__wk_worktree_dirs)'
-complete -c wk -n '__fish_seen_subcommand_from ls' -l porcelain
-complete -c wk -n '__fish_seen_subcommand_from completion' -a 'zsh bash fish'
-
-complete -c wk -l herdr -d 'use the herdr session backend for this run'
-complete -c wk -l tmux -d 'use the tmux session backend for this run'
-complete -c wk -l backend -x -a 'herdr tmux' -d 'session backend for this run'
-`

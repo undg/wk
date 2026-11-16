@@ -1,4 +1,4 @@
-.TH WK 1 "2026-11-08" "wk" "User Commands"
+.TH WK 1 "2026-11-12" "wk" "User Commands"
 .SH NAME
 wk \- manage Git worktrees and their development sessions
 .SH SYNOPSIS
@@ -115,13 +115,24 @@ at the owning project root, or in the current directory outside Git.
 Refuse to overwrite an existing config.
 .TP
 .BI completion " zsh|bash|fish"
-Print the shell completion script for the selected shell.
+Print a Cobra-generated shell completion script for commands, flags, and
+arguments.  Add completion suggests local branches and origin branches,
+including explicit origin/ names.  Delete/rm completion suggests registered
+worktree paths, branches, and a dot for the caller's worktree.
+Backend flag completion suggests herdr or tmux.
+Dynamic completion reads Git directly without loading configuration, prompting,
+or contacting session backends.  Regenerate saved completion scripts after
+upgrading from the hand-written completions.
 .TP
 .BR version , " -v" , " --version"
 Print the wk version.
 .TP
 .BR help , " -h" , " --help"
-Print command help.
+Print command help.  Use
+.B wk help command
+or
+.B wk command --help
+for command-specific arguments and flags.
 .SH OPTIONS
 .TP
 .B --herdr

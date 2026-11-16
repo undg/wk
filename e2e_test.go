@@ -176,7 +176,16 @@ func TestE2ECLIInterfaceAndCompletion(t *testing.T) {
 	for _, arg := range [][]string{{"help"}, {"-h"}, {"--help"}} {
 		got := runE2E(dir, env, "", arg...)
 		mustSucceed(t, got)
-		mustContain(t, got.output, "USAGE")
+		mustContain(t, got.output, "Usage:")
+	}
+	for _, command := range []string{"add", "delete", "rm", "clean", "ls", "init", "completion", "version"} {
+		got := runE2E(dir, env, "YES\n", command, "--help")
+		mustSucceed(t, got)
+		mustContain(t, got.output, "Usage:")
+		mustNotContain(t, got.output, "Run 'wk init'")
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".wk.toml")); !os.IsNotExist(err) {
+		t.Fatalf("help unexpectedly wrote .wk.toml: %v", err)
 	}
 	for _, arg := range [][]string{{"version"}, {"-v"}, {"--version"}} {
 		got := runE2E(dir, env, "", arg...)
@@ -186,15 +195,13 @@ func TestE2ECLIInterfaceAndCompletion(t *testing.T) {
 
 	for shell, marker := range map[string]string{
 		"zsh":  "#compdef wk",
-		"bash": "complete -F _wk_completions wk",
-		"fish": "complete -c wk -l backend",
+		"bash": "bash completion V2 for wk",
+		"fish": "fish completion for wk",
 	} {
 		got := runE2E(dir, env, "", "completion", shell)
 		mustSucceed(t, got)
 		mustContain(t, got.output, marker)
-		mustContain(t, got.output, "--porcelain")
-		mustContain(t, got.output, "delete")
-		mustContain(t, got.output, "origin/")
+		mustContain(t, got.output, "__complete")
 	}
 
 	for _, c := range []struct {
@@ -202,14 +209,21 @@ func TestE2ECLIInterfaceAndCompletion(t *testing.T) {
 		want string
 	}{
 		{nil, "missing argument"},
-		{[]string{"feat/no-implicit-create"}, "did you mean 'wk add"},
-		{[]string{"completion"}, "expected exactly one shell argument"},
+		{[]string{"feat/no-implicit-create"}, "unknown command"},
+		{[]string{"completion"}, "accepts 1 arg(s), received 0"},
 		{[]string{"completion", "powershell"}, "unknown shell"},
-		{[]string{"--backend"}, "--backend needs herdr or tmux"},
+		{[]string{"--backend"}, "flag needs an argument: --backend"},
 		{[]string{"--backend="}, "--backend needs herdr or tmux"},
 		{[]string{"--backend=screen", "help"}, "--backend needs herdr or tmux"},
 		{[]string{"--backend", "screen", "help"}, "--backend needs herdr or tmux"},
-		{[]string{"init", "extra"}, "init takes no arguments"},
+		{[]string{"init", "extra"}, "unknown command"},
+		{[]string{"add"}, "accepts between 1 and 2 arg(s)"},
+		{[]string{"add", "one", "two", "three"}, "accepts between 1 and 2 arg(s)"},
+		{[]string{"delete"}, "accepts 1 arg(s), received 0"},
+		{[]string{"rm", "one", "two"}, "accepts 1 arg(s), received 2"},
+		{[]string{"clean", "extra"}, "unknown command"},
+		{[]string{"ls", "--unknown"}, "unknown flag"},
+		{[]string{"version", "extra"}, "unknown command"},
 	} {
 		got := runE2E(dir, env, "", c.args...)
 		mustFail(t, got)
@@ -257,8 +271,8 @@ session_backend = "tmux"
 	testGit(t, p.root, "branch", "-D", "remote-branch")
 	testGit(t, p.root, "branch", "local", "origin/main")
 
-	// Every accepted backend spelling is exercised around a real add. Flags are
-	// accepted before or after command operands because main extracts them first.
+	// Every accepted backend spelling is exercised around a real add, including
+	// mixed spellings before and after the command and its operands.
 	for _, c := range []struct {
 		args    []string
 		branch  string
@@ -270,6 +284,9 @@ session_backend = "tmux"
 		{[]string{"--backend", "herdr", "add", "feat/herdr"}, "feat/herdr", "herdr"},
 		{[]string{"add", "feat/herdr-short", "--herdr"}, "feat/herdr-short", "herdr"},
 		{[]string{"--tmux", "--herdr", "add", "feat/last-wins"}, "feat/last-wins", "herdr"},
+		{[]string{"--herdr", "add", "feat/last-backend", "--backend=tmux"}, "feat/last-backend", "tmux"},
+		{[]string{"--backend=herdr", "add", "--tmux", "feat/last-short"}, "feat/last-short", "tmux"},
+		{[]string{"--backend=herdr", "add", "feat/repeated-backend", "--backend=tmux"}, "feat/repeated-backend", "tmux"},
 	} {
 		got := p.run("", c.args...)
 		mustSucceed(t, got)

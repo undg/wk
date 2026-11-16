@@ -3,163 +3,124 @@ package main
 import (
 	"fmt"
 	"os"
-	"strings"
+	"strconv"
+
+	"github.com/spf13/cobra"
 )
 
-func usage(w *os.File) {
-	fmt.Fprintf(w, "wk\n\n")
-	fmt.Fprintf(w, "USAGE\n")
-	fmt.Fprintf(w, "  wk add <branch-name|origin/branch-name> [badge]\n")
-	fmt.Fprintf(w, "  wk delete <worktree-dir>\n")
-	fmt.Fprintf(w, "  wk rm <worktree-dir>\n")
-	fmt.Fprintf(w, "  wk clean\n")
-	fmt.Fprintf(w, "  wk ls [--porcelain]\n")
-	fmt.Fprintf(w, "  wk init\n")
-	fmt.Fprintf(w, "  wk completion <zsh|bash|fish>\n")
-	fmt.Fprintf(w, "  wk version|-v|--version\n")
-	fmt.Fprintf(w, "  wk help|-h|--help\n\n")
-	fmt.Fprintf(w, "BEHAVIOR\n")
-	fmt.Fprintf(w, "  add branch-name          creates <sanitized-branch>; checks out origin/branch-name\n")
-	fmt.Fprintf(w, "                           when it exists, else branches from current HEAD (bare: base_ref)\n")
-	fmt.Fprintf(w, "  add origin/branch-name   creates local branch-name from origin/branch-name\n")
-	fmt.Fprintf(w, "  add <branch> <badge>     prefix the Herdr label with [badge]; updates existing workspaces\n")
-	fmt.Fprintf(w, "  delete/rm <dir|branch|.> removes worktree + its session, deletes its branch, prunes\n")
-	fmt.Fprintf(w, "                           accepts the worktree dir, its branch name, or \".\" for cwd\n")
-	fmt.Fprintf(w, "  clean                    delete worktrees whose branch PR has merged\n")
-	fmt.Fprintf(w, "  ls [--porcelain]         show worktrees + session status\n")
-	fmt.Fprintf(w, "                           --porcelain: parse-friendly 3-line blocks (branch, dir, session)\n")
-	fmt.Fprintf(w, "  init                     scaffold .wk.toml at the owning root (cwd outside Git)\n")
-	fmt.Fprintf(w, "  completion <shell>       print a completion script for zsh, bash, or fish\n")
-	fmt.Fprintf(w, "  version                  print the wk version\n\n")
-	fmt.Fprintf(w, "REPOSITORY LAYOUT\n")
-	fmt.Fprintf(w, "  all repositories        worktrees under <project-root>/.wk/\n")
-	fmt.Fprintf(w, "  traditional clone       main checkout cannot be deleted or cleaned\n\n")
-	fmt.Fprintf(w, "SESSION BACKEND\n")
-	fmt.Fprintf(w, "  --herdr | --tmux         override the backend for this run (default: herdr)\n")
-	fmt.Fprintf(w, "  --backend <herdr|tmux>   same, long form; beats session_backend in config.toml\n\n")
-	fmt.Fprintf(w, "EXAMPLES\n")
-	fmt.Fprintf(w, "  wk add feat/my-branch\n")
-	fmt.Fprintf(w, "  wk add origin/someone-branch\n")
-	fmt.Fprintf(w, "  wk delete feat-my-branch\n")
-	fmt.Fprintf(w, "  wk --tmux add feat/my-branch\n")
-}
-
-// extractBackendFlag pulls the session-backend override out of args wherever
-// it appears, so each subcommand's own argument-count checks stay unchanged.
-// A bad value is rejected here rather than in newSessionBackend, so a typo
-// fails before anything loads config or offers to scaffold a .wk.toml.
-func extractBackendFlag(args []string) (string, []string, error) {
-	badValue := func(got string) error {
-		return fmt.Errorf("--backend needs %s or %s, got %q", backendHerdr, backendTmux, got)
+func newRootCommand() *cobra.Command {
+	root := &cobra.Command{
+		Use:           "wk",
+		Short:         "Manage Git worktrees and their development sessions",
+		Version:       resolveVersion(),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		Args:          cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return fmt.Errorf("missing argument: use 'wk help' for available commands")
+		},
 	}
+	root.SetVersionTemplate("wk {{.Version}}\n")
 
-	override := ""
-	var rest []string
-	for i := 0; i < len(args); i++ {
-		switch arg := args[i]; {
-		case arg == "--herdr":
-			override = backendHerdr
-		case arg == "--tmux":
-			override = backendTmux
-		case strings.HasPrefix(arg, "--backend="):
-			override = strings.TrimPrefix(arg, "--backend=")
-		case arg == "--backend":
-			if i+1 >= len(args) {
-				return "", nil, badValue("")
+	// All backend flags update the same value as they are parsed, preserving
+	// last-flag-wins behavior even when different spellings are mixed.
+	backendOverride := ""
+	root.PersistentFlags().Func("backend", "Session backend (herdr or tmux)", func(value string) error {
+		if !validBackendKind(value) {
+			return fmt.Errorf("--backend needs herdr or tmux, got %q", value)
+		}
+		backendOverride = value
+		return nil
+	})
+	for _, kind := range []string{backendHerdr, backendTmux} {
+		root.PersistentFlags().BoolFunc(kind, "Use the "+kind+" session backend", func(value string) error {
+			enabled, err := strconv.ParseBool(value)
+			if err != nil {
+				return err
 			}
-			i++
-			override = args[i]
-		default:
-			rest = append(rest, arg)
-			continue
-		}
-
-		if !validBackendKind(override) {
-			return "", nil, badValue(override)
-		}
+			if enabled {
+				backendOverride = kind
+			}
+			return nil
+		})
 	}
-	return override, rest, nil
+	// The flag was just registered, so a registration error is a programming bug.
+	if err := root.RegisterFlagCompletionFunc("backend", cobra.FixedCompletions([]string{backendHerdr, backendTmux}, cobra.ShellCompDirectiveNoFileComp)); err != nil {
+		panic(err)
+	}
+
+	add := &cobra.Command{
+		Use:   "add <branch-name|origin/branch-name> [badge]",
+		Short: "Create a worktree and open its session",
+		Long: "Reuse a local branch, check out an origin branch, or create a new branch.\n" +
+			"New branches start at the caller's HEAD (bare repositories: base_ref).\n" +
+			"An optional badge changes only the Herdr workspace label.",
+		Args:              cobra.RangeArgs(1, 2),
+		ValidArgsFunction: completeBranches,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			badge := ""
+			if len(args) == 2 {
+				badge = args[1]
+			}
+			return runCreate(args[0], badge, backendOverride)
+		},
+	}
+	deleteCmd := &cobra.Command{
+		Use:               "delete <worktree-dir|branch|.>",
+		Aliases:           []string{"rm"},
+		Short:             "Remove a worktree, its session, and its branch",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeWorktrees,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runDelete(args[0], backendOverride)
+		},
+	}
+	clean := &cobra.Command{
+		Use:               "clean",
+		Short:             "Offer to delete worktrees whose pull requests have merged",
+		Args:              cobra.NoArgs,
+		ValidArgsFunction: cobra.NoFileCompletions,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runClean(backendOverride)
+		},
+	}
+	porcelain := false
+	list := &cobra.Command{
+		Use:               "ls",
+		Short:             "Show worktrees and session status",
+		Args:              cobra.NoArgs,
+		ValidArgsFunction: cobra.NoFileCompletions,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runLs(porcelain, backendOverride)
+		},
+	}
+	list.Flags().BoolVar(&porcelain, "porcelain", false, "Print three-line blocks: branch, absolute path, session")
+	initCmd := &cobra.Command{
+		Use:               "init",
+		Short:             "Scaffold .wk.toml at the owning project root (cwd outside Git)",
+		Args:              cobra.NoArgs,
+		ValidArgsFunction: cobra.NoFileCompletions,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runInit()
+		},
+	}
+	versionCmd := &cobra.Command{
+		Use:               "version",
+		Short:             "Print the wk version",
+		Args:              cobra.NoArgs,
+		ValidArgsFunction: cobra.NoFileCompletions,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, err := fmt.Fprintf(cmd.OutOrStdout(), "wk %s\n", cmd.Root().Version)
+			return err
+		},
+	}
+	root.AddCommand(add, deleteCmd, clean, list, initCmd, versionCmd, newCompletionCommand())
+	return root
 }
 
 func main() {
-	backendOverride, args, err := extractBackendFlag(os.Args[1:])
-	if err != nil {
-		logError("%s", err.Error())
-		usage(os.Stderr)
-		os.Exit(1)
-	}
-	if len(args) == 0 {
-		logError("missing argument")
-		usage(os.Stderr)
-		os.Exit(1)
-	}
-
-	switch args[0] {
-	case "-h", "--help", "help":
-		usage(os.Stdout)
-		return
-	case "version", "-v", "--version":
-		fmt.Println("wk", resolveVersion())
-		return
-	case "add":
-		if len(args) < 2 || len(args) > 3 {
-			logError("expected a branch argument and optional badge")
-			usage(os.Stderr)
-			os.Exit(1)
-		}
-		badge := ""
-		if len(args) == 3 {
-			badge = args[2]
-		}
-		err = runCreate(args[1], badge, backendOverride)
-	case "delete", "rm":
-		if len(args) != 2 {
-			logError("expected exactly one worktree-dir argument")
-			usage(os.Stderr)
-			os.Exit(1)
-		}
-		err = runDelete(args[1], backendOverride)
-	case "clean":
-		if len(args) != 1 {
-			logError("clean takes no arguments")
-			os.Exit(1)
-		}
-		err = runClean(backendOverride)
-	case "ls":
-		porcelain := false
-		switch len(args) {
-		case 1:
-		case 2:
-			if args[1] != "--porcelain" {
-				logError("unknown flag for ls: %s", args[1])
-				usage(os.Stderr)
-				os.Exit(1)
-			}
-			porcelain = true
-		default:
-			logError("ls takes at most one flag (--porcelain)")
-			usage(os.Stderr)
-			os.Exit(1)
-		}
-		err = runLs(porcelain, backendOverride)
-	case "init":
-		if len(args) != 1 {
-			logError("init takes no arguments")
-			os.Exit(1)
-		}
-		err = runInit()
-	case "completion":
-		err = runCompletion(args[1:])
-	default:
-		// No implicit create: a bare branch name here is either a typo of a
-		// subcommand or a stray argument, not a create request.
-		logError("unknown command: %s (did you mean 'wk add %s'?)", args[0], args[0])
-		usage(os.Stderr)
-		os.Exit(1)
-	}
-
-	if err != nil {
-		logError("%s", err.Error())
+	if err := newRootCommand().Execute(); err != nil {
+		logError("%s", err)
 		os.Exit(1)
 	}
 }
