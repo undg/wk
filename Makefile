@@ -9,6 +9,19 @@ INSTALL ?= install
 DIRTY := $(shell test -z "$$(git status --porcelain 2>/dev/null)" || echo -dirty)
 VERSION := $(shell (git describe --tags --always 2>/dev/null || echo dev) | sed -E 's/-([0-9]+)-g([0-9a-f]+)$$/-\1-\2/')$(DIRTY)
 
+# Colour only when make reports a terminal on stdout; NO_COLOR always wins.
+COLOR := $(if $(MAKE_TERMOUT),1)
+ifneq ($(NO_COLOR),)
+COLOR :=
+endif
+ifeq ($(COLOR),1)
+BLUE  := \033[0;34m
+GREEN := \033[0;32m
+RED   := \033[0;31m
+BOLD  := \033[1m
+RESET := \033[0m
+endif
+
 .PHONY: help
 help:
 	@sed -n 's/^##//p' $(MAKEFILE_LIST) | column -t -s ':' | sed -e 's/^/ /'
@@ -21,14 +34,17 @@ build:
 ## install: install wk and its man page (override PREFIX or DESTDIR as needed)
 .PHONY: install
 install: build
-	$(INSTALL) -d "$(DESTDIR)$(BINDIR)" "$(DESTDIR)$(MAN1DIR)"
-	$(INSTALL) -m 755 bin/$(BINARY_NAME) "$(DESTDIR)$(BINDIR)/$(BINARY_NAME)"
-	$(INSTALL) -m 644 $(MANPAGE) "$(DESTDIR)$(MAN1DIR)/$(MANPAGE)"
+	@$(INSTALL) -d "$(DESTDIR)$(BINDIR)" "$(DESTDIR)$(MAN1DIR)" \
+	 && $(INSTALL) -m 755 bin/$(BINARY_NAME) "$(DESTDIR)$(BINDIR)/$(BINARY_NAME)" \
+	 && $(INSTALL) -m 644 $(MANPAGE) "$(DESTDIR)$(MAN1DIR)/$(MANPAGE)" \
+	 || { printf '$(RED)[wk]$(RESET) $(RED)install failed$(RESET)\n' >&2; exit 1; }
+	@printf '$(GREEN)[wk]$(RESET) installed $(BOLD)wk $(VERSION)$(RESET)\n     bin  %s\n     man  %s\n' \
+		"$(DESTDIR)$(BINDIR)/$(BINARY_NAME)" "$(DESTDIR)$(MAN1DIR)/$(MANPAGE)"
 
 ## install-local: install wk and its man page into ~/.local
 .PHONY: install-local
 install-local:
-	$(MAKE) install PREFIX="$(HOME)/.local"
+	@$(MAKE) --no-print-directory install PREFIX="$(HOME)/.local"
 
 ## bump-patch: tag the next patch release
 .PHONY: bump-patch
